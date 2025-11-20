@@ -113,7 +113,34 @@ const userSchema = new mongoose.Schema({
       type: Date,
       default: Date.now
     }
-  }]
+  }],
+  points: {
+    type: Number,
+    default: 0
+  },
+  communityActivity: {
+    postsCreated: {
+      type: Number,
+      default: 0
+    },
+    commentsMade: {
+      type: Number,
+      default: 0
+    },
+    likesGiven: {
+      type: Number,
+      default: 0
+    },
+    likesReceived: {
+      type: Number,
+      default: 0
+    }
+  },
+  userReferenceId: {
+    type: String,
+    unique: true,
+    sparse: true
+  }
 }, {
   timestamps: true
 });

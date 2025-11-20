@@ -509,10 +509,13 @@ export const getUserProfile = async (req, res) => {
     }
 
     res.json({
-      name: user.name,
-      email: user.email,
-      phone: user.phone,
-      avatar: user.avatar,
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        avatar: user.avatar
+      },
       tokens: {
         daily: user.tokens,
         dailyUsed: user.tokensUsedToday || 0,

@@ -3,11 +3,13 @@ import Plan from './Plan.js';
 import Order from './Order.js';
 import Resource from './Resource.js';
 import Lead from './Lead.js';
+import Feedback from './Feedback.js';
 
 export {
   User,
   Plan,
   Order,
   Resource,
-  Lead
+  Lead,
+  Feedback
 };

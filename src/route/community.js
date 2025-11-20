@@ -1,0 +1,49 @@
+import express from 'express';
+import { authenticateToken } from '../middleware/auth.js';
+import { upload } from '../middleware/upload.js';
+import {
+  createPost,
+  deletePost,
+  likePost,
+  unlikePost,
+  addComment,
+  deleteComment,
+  getAllPosts,
+  getLeaderboard,
+  getTrendingPosts,
+  getCommunityStats
+} from '../controller/communityController.js';
+
+const router = express.Router();
+
+// POST /api/community/post (with optional image)
+router.post('/post', authenticateToken, upload.single('image'), createPost);
+
+// DELETE /api/community/post/:postId
+router.delete('/post/:postId', authenticateToken, deletePost);
+
+// POST /api/community/like/:postId
+router.post('/like/:postId', authenticateToken, likePost);
+
+// POST /api/community/unlike/:postId
+router.post('/unlike/:postId', authenticateToken, unlikePost);
+
+// POST /api/community/comment/:postId
+router.post('/comment/:postId', authenticateToken, addComment);
+
+// DELETE /api/community/comment/:commentId
+router.delete('/comment/:commentId', authenticateToken, deleteComment);
+
+// GET /api/community/posts (with search)
+router.get('/posts', authenticateToken, getAllPosts);
+
+// GET /api/community/trending
+router.get('/trending', authenticateToken, getTrendingPosts);
+
+// GET /api/community/leaderboard
+router.get('/leaderboard', authenticateToken, getLeaderboard);
+
+// GET /api/community/stats
+router.get('/stats', authenticateToken, getCommunityStats);
+
+export default router;
