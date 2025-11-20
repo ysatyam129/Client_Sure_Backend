@@ -4,14 +4,28 @@ import User from '../../models/User.js';
 // Get all posts for admin moderation
 export const getAllPostsAdmin = async (req, res) => {
   try {
+    console.log('Admin community request received');
+    console.log('Admin user:', req.admin);
+    
     const posts = await Feedback.find()
       .populate('user_id', 'name email avatar')
       .populate('comments.user_id', 'name email avatar')
       .sort({ createdAt: -1 });
 
-    res.json({ posts });
+    console.log(`Found ${posts.length} posts for admin`);
+    
+    res.status(200).json({ 
+      success: true,
+      posts: posts,
+      count: posts.length
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Error fetching posts', error: error.message });
+    console.error('Error in getAllPostsAdmin:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error fetching posts', 
+      error: error.message 
+    });
   }
 };
 
@@ -19,13 +33,20 @@ export const getAllPostsAdmin = async (req, res) => {
 export const deletePostAdmin = async (req, res) => {
   try {
     const { postId } = req.params;
+    console.log('Admin deleting post:', postId);
 
-    const post = await Feedback.findById(postId);
+    const post = await Feedback.findById(postId).populate('user_id', 'name email');
     if (!post) {
-      return res.status(404).json({ message: 'Post not found' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Post not found' 
+      });
     }
 
-    const postOwnerId = post.user_id;
+    const postOwnerId = post.user_id._id;
+    const postOwnerName = post.user_id.name;
+    
+    console.log(`Deleting post by ${postOwnerName} (${postOwnerId})`);
 
     // Delete the post
     await Feedback.findByIdAndDelete(postId);
@@ -38,9 +59,18 @@ export const deletePostAdmin = async (req, res) => {
       }
     });
 
-    res.json({ message: 'Post deleted successfully by admin' });
+    console.log('Post deleted and points deducted');
+    res.json({ 
+      success: true,
+      message: `Post deleted successfully. 5 points deducted from ${postOwnerName}` 
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Error deleting post', error: error.message });
+    console.error('Error deleting post:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error deleting post', 
+      error: error.message 
+    });
   }
 };
 
@@ -48,14 +78,23 @@ export const deletePostAdmin = async (req, res) => {
 export const deleteCommentAdmin = async (req, res) => {
   try {
     const { commentId } = req.params;
+    console.log('Admin deleting comment:', commentId);
 
-    const post = await Feedback.findOne({ 'comments._id': commentId });
+    const post = await Feedback.findOne({ 'comments._id': commentId })
+      .populate('comments.user_id', 'name email');
+    
     if (!post) {
-      return res.status(404).json({ message: 'Comment not found' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Comment not found' 
+      });
     }
 
     const comment = post.comments.id(commentId);
-    const commentOwnerId = comment.user_id;
+    const commentOwnerId = comment.user_id._id;
+    const commentOwnerName = comment.user_id.name;
+    
+    console.log(`Deleting comment by ${commentOwnerName} (${commentOwnerId})`);
 
     // Remove comment
     post.comments.pull(commentId);
@@ -69,8 +108,17 @@ export const deleteCommentAdmin = async (req, res) => {
       }
     });
 
-    res.json({ message: 'Comment deleted successfully by admin' });
+    console.log('Comment deleted and points deducted');
+    res.json({ 
+      success: true,
+      message: `Comment deleted successfully. 2 points deducted from ${commentOwnerName}` 
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Error deleting comment', error: error.message });
+    console.error('Error deleting comment:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error deleting comment', 
+      error: error.message 
+    });
   }
 };

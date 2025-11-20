@@ -140,6 +140,39 @@ const userSchema = new mongoose.Schema({
     type: String,
     unique: true,
     sparse: true
+  },
+  notifications: [{
+    type: {
+      type: String,
+      enum: ['new_post', 'new_comment', 'post_like', 'post_unlike'],
+      required: true
+    },
+    message: {
+      type: String,
+      required: true
+    },
+    postId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Feedback',
+      required: true
+    },
+    fromUser: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    isRead: {
+      type: Boolean,
+      default: false
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+  unreadNotificationCount: {
+    type: Number,
+    default: 0
   }
 }, {
   timestamps: true

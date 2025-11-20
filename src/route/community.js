@@ -1,6 +1,6 @@
 import express from 'express';
 import { authenticateToken } from '../middleware/auth.js';
-import { upload } from '../middleware/upload.js';
+import { communityUpload } from '../middleware/communityUpload.js';
 import {
   createPost,
   deletePost,
@@ -17,7 +17,7 @@ import {
 const router = express.Router();
 
 // POST /api/community/post (with optional image)
-router.post('/post', authenticateToken, upload.single('image'), createPost);
+router.post('/post', authenticateToken, communityUpload.single('image'), createPost);
 
 // DELETE /api/community/post/:postId
 router.delete('/post/:postId', authenticateToken, deletePost);

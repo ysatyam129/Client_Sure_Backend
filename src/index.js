@@ -11,8 +11,9 @@ import adminRoute from "./route/admin.js";
 import resourcesRoute from "./route/resources.js";
 import leadsRoute from "./route/leads.js";
 import communityRoute from "./route/community.js";
+import notificationsRoute from "./route/notifications.js";
 import { startTokenRefreshCron } from "./services/cronJobs.js";
-import { seedInitialData } from "./services/seedData.js";
+// import { seedInitialData } from "./services/seedData.js"; // Disabled seed data
 
 
 dotenv.config();
@@ -31,8 +32,8 @@ app.use(express.urlencoded({ extended: true }));
 // Database connection
 dbConnect();
 
-// Initialize seed data
-seedInitialData();
+// Seed data disabled - only user-generated data will be stored
+// seedInitialData();
 
 // Start cron jobs
 startTokenRefreshCron();
@@ -49,6 +50,7 @@ app.use("/api/admin", adminRoute);
 app.use("/api/resources", resourcesRoute);
 app.use("/api/leads", leadsRoute);
 app.use("/api/community", communityRoute);
+app.use("/api/notifications", notificationsRoute);
 app.use("/", dummyCheckoutRoute);
 
 app.listen(PORT,()=>{

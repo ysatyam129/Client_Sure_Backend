@@ -1,5 +1,6 @@
 import Feedback from '../models/Feedback.js';
 import User from '../models/User.js';
+import { createNotification, notifyNewPost, markNotificationsAsRead, cleanOldNotifications } from '../utils/notificationUtils.js';
 
 // Get trending posts
 export const getTrendingPosts = async (req, res) => {
@@ -49,6 +50,8 @@ export const createPost = async (req, res) => {
     const { post_title, description } = req.body;
     const userId = req.user.id;
 
+    console.log('Creating post:', { post_title, description, userId });
+
     const user = await User.findById(userId);
     if (!checkSubscriptionAccess(user)) {
       return res.status(403).json({ message: 'Subscription expired. Community access denied.' });
@@ -60,13 +63,15 @@ export const createPost = async (req, res) => {
       description
     };
 
-    // Add image if uploaded
+    // Add Cloudinary image URL if uploaded
     if (req.file) {
-      postData.image = req.file.path;
+      postData.image = req.file.path; // Cloudinary URL
+      console.log('Image uploaded to Cloudinary:', req.file.path);
     }
 
     const post = new Feedback(postData);
-    await post.save();
+    const savedPost = await post.save();
+    console.log('Post saved successfully:', savedPost._id);
 
     // Update user points and activity
     await User.findByIdAndUpdate(userId, {
@@ -76,9 +81,25 @@ export const createPost = async (req, res) => {
       }
     });
 
-    res.status(201).json({ message: 'Post created successfully', post });
+    console.log('User points updated for post creation');
+    
+    // Notify all users about new post (async, don't wait)
+    notifyNewPost(userId, savedPost._id, savedPost.post_title).catch(err => 
+      console.error('Error sending new post notifications:', err)
+    );
+    
+    res.status(201).json({ 
+      success: true,
+      message: 'Post created successfully', 
+      post: savedPost 
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Error creating post', error: error.message });
+    console.error('Error creating post:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error creating post', 
+      error: error.message 
+    });
   }
 };
 
@@ -119,38 +140,35 @@ export const likePost = async (req, res) => {
     const { postId } = req.params;
     const userId = req.user.id;
 
-    const user = await User.findById(userId);
-    if (!checkSubscriptionAccess(user)) {
-      return res.status(403).json({ message: 'Subscription expired. Community access denied.' });
-    }
+    console.log('=== LIKE REQUEST START ===');
+    console.log('PostId:', postId);
+    console.log('UserId:', userId);
 
     const post = await Feedback.findById(postId);
     if (!post) {
       return res.status(404).json({ message: 'Post not found' });
     }
 
-    const alreadyLiked = post.likes.some(like => like.user_id.toString() === userId);
+    const userIdStr = userId.toString();
+    const alreadyLiked = post.likes.some(like => like.user_id.toString() === userIdStr);
+    
+    console.log('Already liked check:', alreadyLiked);
+    console.log('Current likes:', post.likes.length);
+    
     if (alreadyLiked) {
+      console.log('❌ Post already liked');
       return res.status(400).json({ message: 'Post already liked' });
     }
 
     post.likes.push({ user_id: userId });
     await post.save();
 
-    // Update points
-    await User.findByIdAndUpdate(userId, {
-      $inc: { 'communityActivity.likesGiven': 1 }
-    });
-
-    await User.findByIdAndUpdate(post.user_id, {
-      $inc: { 
-        points: 1,
-        'communityActivity.likesReceived': 1
-      }
-    });
+    console.log('✅ Like added, total likes:', post.likes.length);
+    console.log('=== LIKE REQUEST END ===');
 
     res.json({ message: 'Post liked successfully' });
   } catch (error) {
+    console.error('Like post error:', error);
     res.status(500).json({ message: 'Error liking post', error: error.message });
   }
 };
@@ -161,38 +179,47 @@ export const unlikePost = async (req, res) => {
     const { postId } = req.params;
     const userId = req.user.id;
 
-    const user = await User.findById(userId);
-    if (!checkSubscriptionAccess(user)) {
-      return res.status(403).json({ message: 'Subscription expired. Community access denied.' });
-    }
+    console.log('=== UNLIKE REQUEST START ===');
+    console.log('PostId:', postId);
+    console.log('UserId:', userId);
+    console.log('UserId type:', typeof userId);
 
     const post = await Feedback.findById(postId);
     if (!post) {
       return res.status(404).json({ message: 'Post not found' });
     }
 
-    const likeIndex = post.likes.findIndex(like => like.user_id.toString() === userId);
+    console.log('Total likes before:', post.likes.length);
+    console.log('All likes:', post.likes.map(like => ({
+      id: like.user_id.toString(),
+      type: typeof like.user_id
+    })));
+
+    // Convert userId to string for comparison
+    const userIdStr = userId.toString();
+    console.log('UserIdStr:', userIdStr);
+
+    // Find like by this user
+    const likeIndex = post.likes.findIndex(like => {
+      const likeUserIdStr = like.user_id.toString();
+      console.log('Comparing:', likeUserIdStr, '===', userIdStr, '=', likeUserIdStr === userIdStr);
+      return likeUserIdStr === userIdStr;
+    });
+
+    console.log('Found like at index:', likeIndex);
+
     if (likeIndex === -1) {
+      console.log('❌ No like found for this user');
       return res.status(400).json({ message: 'You have not liked this post yet' });
     }
 
+    // Remove the like
+    console.log('✅ Removing like at index:', likeIndex);
     post.likes.splice(likeIndex, 1);
     await post.save();
 
-    // Update points - ensure user exists before updating
-    await User.findByIdAndUpdate(userId, {
-      $inc: { 'communityActivity.likesGiven': -1 }
-    });
-
-    // Only update post owner points if they exist
-    if (post.user_id) {
-      await User.findByIdAndUpdate(post.user_id, {
-        $inc: { 
-          points: -1,
-          'communityActivity.likesReceived': -1
-        }
-      });
-    }
+    console.log('Total likes after:', post.likes.length);
+    console.log('=== UNLIKE REQUEST END ===');
 
     res.json({ message: 'Post unliked successfully' });
   } catch (error) {
@@ -235,6 +262,15 @@ export const addComment = async (req, res) => {
       }
     });
 
+    // Notify post owner about new comment (if not commenting on own post)
+    if (post.user_id.toString() !== userId) {
+      const commenter = await User.findById(userId).select('name');
+      const message = `${commenter.name} commented on your post: "${post.post_title}"`;
+      createNotification(post.user_id, 'new_comment', message, postId, userId).catch(err => 
+        console.error('Error creating comment notification:', err)
+      );
+    }
+
     res.status(201).json({ message: 'Comment added successfully', comment });
   } catch (error) {
     res.status(500).json({ message: 'Error adding comment', error: error.message });
@@ -274,33 +310,117 @@ export const deleteComment = async (req, res) => {
   }
 };
 
-// Get all posts with search
+// Get all posts with advanced search and filters
 export const getAllPosts = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { search } = req.query;
+    const { 
+      search, 
+      author, 
+      hasImage, 
+      dateFrom, 
+      dateTo, 
+      sortBy = 'latest',
+      minLikes = 0,
+      page = 1,
+      limit = 10
+    } = req.query;
     
     const user = await User.findById(userId);
     if (!checkSubscriptionAccess(user)) {
       return res.status(403).json({ message: 'Subscription expired. Community access denied.' });
     }
 
+    // Build search query
     let query = {};
+    
     if (search) {
-      query = {
-        $or: [
-          { post_title: { $regex: search, $options: 'i' } },
-          { description: { $regex: search, $options: 'i' } }
-        ]
-      };
+      query.$or = [
+        { post_title: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
+    }
+    
+    if (author) {
+      query.user_id = author;
+    }
+    
+    if (hasImage === 'true') {
+      query.image = { $exists: true, $ne: null };
+    }
+    
+    if (dateFrom || dateTo) {
+      query.createdAt = {};
+      if (dateFrom) query.createdAt.$gte = new Date(dateFrom);
+      if (dateTo) query.createdAt.$lte = new Date(dateTo);
     }
 
-    const posts = await Feedback.find(query)
-      .populate('user_id', 'name avatar')
-      .populate('comments.user_id', 'name avatar')
-      .sort({ createdAt: -1 });
+    // Build sort options
+    let sortOptions = {};
+    switch (sortBy) {
+      case 'popular':
+        sortOptions = { 'likesCount': -1, createdAt: -1 };
+        break;
+      case 'trending':
+        sortOptions = { 'engagement': -1, createdAt: -1 };
+        break;
+      case 'oldest':
+        sortOptions = { createdAt: 1 };
+        break;
+      default: // latest
+        sortOptions = { createdAt: -1 };
+    }
 
-    res.json({ posts });
+    // Pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Aggregation pipeline for advanced features
+    const pipeline = [
+      { $match: query },
+      {
+        $addFields: {
+          likesCount: { $size: '$likes' },
+          commentsCount: { $size: '$comments' },
+          engagement: {
+            $add: [
+              { $size: '$likes' },
+              { $multiply: [{ $size: '$comments' }, 2] }
+            ]
+          }
+        }
+      },
+      {
+        $match: {
+          likesCount: { $gte: parseInt(minLikes) }
+        }
+      },
+      { $sort: sortOptions },
+      { $skip: skip },
+      { $limit: parseInt(limit) }
+    ];
+
+    const posts = await Feedback.aggregate(pipeline);
+    
+    // Populate user data
+    await Feedback.populate(posts, [
+      { path: 'user_id', select: 'name avatar' },
+      { path: 'comments.user_id', select: 'name avatar' }
+    ]);
+
+    // Get total count for pagination
+    const totalPosts = await Feedback.countDocuments(query);
+    const totalPages = Math.ceil(totalPosts / parseInt(limit));
+
+    res.json({ 
+      posts,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages,
+        totalPosts,
+        hasNext: parseInt(page) < totalPages,
+        hasPrev: parseInt(page) > 1
+      }
+    });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching posts', error: error.message });
   }
@@ -341,25 +461,6 @@ export const getCommunityStats = async (req, res) => {
     const user = await User.findById(userId);
     if (!checkSubscriptionAccess(user)) {
       return res.status(403).json({ message: 'Subscription expired. Community access denied.' });
-    }
-
-    const stats = await Promise.all([
-      Feedback.countDocuments(),
-      Feedback.aggregate([{ $unwind: '$comments' }, { $count: 'total' }]),
-      Feedback.aggregate([{ $unwind: '$likes' }, { $count: 'total' }]),
-      User.countDocuments({ points: { $gt: 0 } })
-    ]);
-
-    res.json({
-      totalPosts: stats[0],
-      totalComments: stats[1][0]?.total || 0,
-      totalLikes: stats[2][0]?.total || 0,
-      activeMembers: stats[3]
-    });
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching community stats', error: error.message });
-  }
-};es.status(403).json({ message: 'Subscription expired. Community access denied.' });
     }
 
     const stats = await Promise.all([

@@ -30,7 +30,10 @@ export const adminLogin = async (req, res) => {
       maxAge: 24 * 60 * 60 * 1000 // 24 hours
     });
 
-    res.json({ message: 'Login successful' });
+    res.json({ 
+      message: 'Login successful',
+      token: token // Send token in response for localStorage
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
