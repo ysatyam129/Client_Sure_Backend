@@ -1,6 +1,7 @@
 import Feedback from '../models/Feedback.js';
 import User from '../models/User.js';
 import { createNotification, notifyNewPost, markNotificationsAsRead, cleanOldNotifications } from '../utils/notificationUtils.js';
+import { uploadToCloudinary } from '../middleware/communityUpload.js';
 
 // Get trending posts
 export const getTrendingPosts = async (req, res) => {
@@ -63,10 +64,20 @@ export const createPost = async (req, res) => {
       description
     };
 
-    // Add Cloudinary image URL if uploaded
+    // Upload image to Cloudinary if provided
     if (req.file) {
-      postData.image = req.file.path; // Cloudinary URL
-      console.log('Image uploaded to Cloudinary:', req.file.path);
+      try {
+        const uploadResult = await uploadToCloudinary(req.file);
+        postData.image = uploadResult.secure_url;
+        console.log('Image uploaded to Cloudinary:', uploadResult.secure_url);
+      } catch (uploadError) {
+        console.error('Cloudinary upload error:', uploadError);
+        return res.status(500).json({ 
+          success: false,
+          message: 'Error uploading image', 
+          error: uploadError.message 
+        });
+      }
     }
 
     const post = new Feedback(postData);
@@ -118,9 +129,16 @@ export const deletePost = async (req, res) => {
       return res.status(403).json({ message: 'You can only delete your own posts' });
     }
 
+    // Get all unique commenters before deleting the post
+    const commenters = [...new Set(post.comments.map(comment => comment.user_id.toString()))];
+    const totalComments = post.comments.length;
+
+    console.log(`Deleting post with ${totalComments} comments from ${commenters.length} unique users`);
+
+    // Delete the post
     await Feedback.findByIdAndDelete(postId);
 
-    // Deduct points
+    // Deduct points from post owner
     await User.findByIdAndUpdate(userId, {
       $inc: { 
         points: -5,
@@ -128,8 +146,39 @@ export const deletePost = async (req, res) => {
       }
     });
 
-    res.json({ message: 'Post deleted successfully' });
+    // Deduct points from all commenters (2 points per comment)
+    if (commenters.length > 0) {
+      const commenterUpdates = commenters.map(async (commenterId) => {
+        // Count how many comments this user made on this post
+        const userCommentCount = post.comments.filter(
+          comment => comment.user_id.toString() === commenterId
+        ).length;
+        
+        const pointsToDeduct = userCommentCount * 2;
+        
+        console.log(`Deducting ${pointsToDeduct} points from user ${commenterId} for ${userCommentCount} comments`);
+        
+        return User.findByIdAndUpdate(commenterId, {
+          $inc: { 
+            points: -pointsToDeduct,
+            'communityActivity.commentsMade': -userCommentCount
+          }
+        });
+      });
+
+      await Promise.all(commenterUpdates);
+      console.log(`Points deducted from ${commenters.length} commenters`);
+    }
+
+    res.json({ 
+      message: 'Post deleted successfully',
+      details: {
+        commentsDeleted: totalComments,
+        usersAffected: commenters.length + 1 // +1 for post owner
+      }
+    });
   } catch (error) {
+    console.error('Error deleting post:', error);
     res.status(500).json({ message: 'Error deleting post', error: error.message });
   }
 };

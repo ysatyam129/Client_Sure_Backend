@@ -1,6 +1,8 @@
 import express from 'express';
 import { authenticateToken } from '../middleware/auth.js';
-import { User } from '../models/index.js';
+import { User } from '../models/index.js'
+import { addSocialAccount, deleteSocialAccount, getSocialAccounts } from '../controller/UserController.js/socialAccountController.js';
+
 
 const router = express.Router();
 
@@ -59,5 +61,9 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+router.get('/social-accounts', authenticateToken, getSocialAccounts);
+router.post('/social-accounts', authenticateToken, addSocialAccount);
+router.delete('/social-accounts/:id', authenticateToken, deleteSocialAccount);
+
 
 export default router;

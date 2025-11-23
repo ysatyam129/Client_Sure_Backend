@@ -25,6 +25,7 @@
     "test:renewal": "node test-plan-renewal.js"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "axios": "^1.13.2",
     "bcrypt": "^6.0.0",
     "cloudinary": "^2.8.0",
@@ -36,12 +37,10 @@
     "mongodb": "^6.20.0",
     "mongoose": "^8.19.2",
     "multer": "^2.0.2",
-    "multer-storage-cloudinary": "^4.0.0",
     "node-cron": "^3.0.3",
+    "node-fetch": "^3.3.2",
     "nodemailer": "^6.10.1",
     "nodemon": "^3.1.10",
-    "xlsx": "^0.18.5",
-    "@google/generative-ai": "^0.24.1",
-    "node-fetch": "^3.3.2"
+    "xlsx": "^0.18.5"
   }
 }
