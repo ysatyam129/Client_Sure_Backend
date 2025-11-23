@@ -55,6 +55,7 @@ app.use("/api/community", communityRoute);
 app.use("/api/notifications", notificationsRoute);
 app.use("/api/referrals", referralsRoute);
 app.use("/api/compose", composeRoute);
+
 app.use("/", dummyCheckoutRoute);
 
 app.listen(PORT,()=>{

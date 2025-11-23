@@ -46,7 +46,11 @@ export const deletePostAdmin = async (req, res) => {
     const postOwnerId = post.user_id._id;
     const postOwnerName = post.user_id.name;
     
-    console.log(`Deleting post by ${postOwnerName} (${postOwnerId})`);
+    // Get all unique commenters before deleting the post
+    const commenters = [...new Set(post.comments.map(comment => comment.user_id.toString()))];
+    const totalComments = post.comments.length;
+    
+    console.log(`Admin deleting post by ${postOwnerName} with ${totalComments} comments from ${commenters.length} unique users`);
 
     // Delete the post
     await Feedback.findByIdAndDelete(postId);
@@ -59,10 +63,38 @@ export const deletePostAdmin = async (req, res) => {
       }
     });
 
-    console.log('Post deleted and points deducted');
+    // Deduct points from all commenters (2 points per comment)
+    if (commenters.length > 0) {
+      const commenterUpdates = commenters.map(async (commenterId) => {
+        // Count how many comments this user made on this post
+        const userCommentCount = post.comments.filter(
+          comment => comment.user_id.toString() === commenterId
+        ).length;
+        
+        const pointsToDeduct = userCommentCount * 2;
+        
+        console.log(`Admin deducting ${pointsToDeduct} points from user ${commenterId} for ${userCommentCount} comments`);
+        
+        return User.findByIdAndUpdate(commenterId, {
+          $inc: { 
+            points: -pointsToDeduct,
+            'communityActivity.commentsMade': -userCommentCount
+          }
+        });
+      });
+
+      await Promise.all(commenterUpdates);
+      console.log(`Points deducted from ${commenters.length} commenters`);
+    }
+
+    console.log('Post deleted and all points deducted');
     res.json({ 
       success: true,
-      message: `Post deleted successfully. 5 points deducted from ${postOwnerName}` 
+      message: `Post deleted successfully. Points deducted from ${postOwnerName} and ${commenters.length} commenters`,
+      details: {
+        commentsDeleted: totalComments,
+        usersAffected: commenters.length + 1
+      }
     });
   } catch (error) {
     console.error('Error deleting post:', error);
