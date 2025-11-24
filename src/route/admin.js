@@ -3,7 +3,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { authenticateAdmin } from '../middleware/adminAuth.js';
 import { upload } from '../middleware/upload.js';
 import { excelUpload } from '../middleware/excelUpload.js';
-import { manualTokenRefresh } from '../services/cronJobs.js';
+import { manualTokenRefresh, manualSubscriptionCheck } from '../services/cronJobs.js';
 import { adminLogin, adminLogout } from '../controller/AdminController/authController.js';
 import { createResource, getResources, getResource, updateResource, deleteResource } from '../controller/AdminController/resourceController.js';
 import { uploadLeads, getLeads, getLead, updateLead, deleteLead } from '../controller/AdminController/leadController.js';
@@ -68,6 +68,29 @@ router.post('/refresh-tokens', authenticateToken, async (req, res) => {
     }
   } catch (error) {
     console.error('Manual refresh endpoint error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/admin/check-subscriptions - Manual subscription expiry check (for testing)
+router.post('/check-subscriptions', authenticateAdmin, async (req, res) => {
+  try {
+    const { email } = req.body;
+    const result = await manualSubscriptionCheck(email);
+    
+    if (result.success) {
+      res.json({
+        message: 'Subscription check completed successfully',
+        results: result.results
+      });
+    } else {
+      res.status(500).json({
+        error: 'Subscription check failed',
+        details: result.error
+      });
+    }
+  } catch (error) {
+    console.error('Manual subscription check endpoint error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

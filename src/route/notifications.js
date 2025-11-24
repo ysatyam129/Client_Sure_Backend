@@ -8,7 +8,7 @@ const router = express.Router();
 // GET /api/notifications - Get user notifications
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const { page = 1, limit = 20 } = req.query;
     
     const user = await User.findById(userId)
@@ -39,7 +39,7 @@ router.get('/', authenticateToken, async (req, res) => {
 // GET /api/notifications/count - Get unread notification count
 router.get('/count', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const user = await User.findById(userId).select('unreadNotificationCount');
     
     if (!user) {
@@ -56,7 +56,7 @@ router.get('/count', authenticateToken, async (req, res) => {
 // PUT /api/notifications/mark-read - Mark specific notifications as read
 router.put('/mark-read', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const { notificationIds } = req.body;
 
     const success = await markNotificationsAsRead(userId, notificationIds);
@@ -75,7 +75,7 @@ router.put('/mark-read', authenticateToken, async (req, res) => {
 // PUT /api/notifications/mark-all-read - Mark all notifications as read
 router.put('/mark-all-read', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
 
     const success = await markNotificationsAsRead(userId);
     
@@ -90,10 +90,63 @@ router.put('/mark-all-read', authenticateToken, async (req, res) => {
   }
 });
 
+// DELETE /api/notifications/all - Delete all notifications
+router.delete('/all', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    await User.findByIdAndUpdate(userId, {
+      $set: { 
+        notifications: [],
+        unreadNotificationCount: 0
+      }
+    });
+
+    res.json({ message: 'All notifications deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting all notifications:', error);
+    res.status(500).json({ message: 'Error deleting all notifications', error: error.message });
+  }
+});
+
+// DELETE /api/notifications/:notificationId - Delete specific notification
+router.delete('/:notificationId', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { notificationId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const notification = user.notifications.id(notificationId);
+    if (!notification) {
+      return res.status(404).json({ message: 'Notification not found' });
+    }
+
+    // Decrease unread count if notification was unread
+    const updateQuery = {
+      $pull: { notifications: { _id: notificationId } }
+    };
+    
+    if (!notification.isRead) {
+      updateQuery.$inc = { unreadNotificationCount: -1 };
+    }
+
+    await User.findByIdAndUpdate(userId, updateQuery);
+
+    res.json({ message: 'Notification deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting notification:', error);
+    res.status(500).json({ message: 'Error deleting notification', error: error.message });
+  }
+});
+
 // DELETE /api/notifications/clean - Clean old notifications
 router.delete('/clean', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
 
     const success = await cleanOldNotifications(userId);
     

@@ -64,6 +64,10 @@ const userSchema = new mongoose.Schema({
       type: Date,
       required: false
     },
+    isActive: {
+      type: Boolean,
+      default: true
+    },
     dailyTokens: {
       type: Number,
       default: 100

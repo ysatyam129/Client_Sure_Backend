@@ -4,6 +4,8 @@ import Order from './Order.js';
 import Resource from './Resource.js';
 import Lead from './Lead.js';
 import Feedback from './Feedback.js';
+import TokenPackage from './TokenPackage.js';
+import TokenTransaction from './TokenTransaction.js';
 
 export {
   User,
@@ -11,5 +13,7 @@ export {
   Order,
   Resource,
   Lead,
-  Feedback
+  Feedback,
+  TokenPackage,
+  TokenTransaction
 };

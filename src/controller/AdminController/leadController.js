@@ -183,41 +183,72 @@ export const uploadLeads = async (req, res) => {
 // GET /api/admin/leads
 export const getLeads = async (req, res) => {
   try {
-    const { page = 1, limit = 50 } = req.query;
-    const skip = (page - 1) * limit;
+    console.log('Getting leads - Query params:', req.query);
     
+    const { page = 1, limit = 50 } = req.query;
+    const skip = (page - 1) * parseInt(limit);
+    
+    console.log('Pagination:', { page: parseInt(page), limit: parseInt(limit), skip });
+    
+    // Check if Lead model is available
+    if (!Lead) {
+      console.error('Lead model not found');
+      return res.status(500).json({ error: 'Lead model not available' });
+    }
+    
+    // Test database connection
+    const testCount = await Lead.countDocuments();
+    console.log('Total leads in database:', testCount);
     
     const leads = await Lead.find()
       .sort({ uploadSequence: -1, createdAt: -1 })
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(parseInt(limit))
+      .lean(); // Use lean for better performance
+    
+    console.log('Fetched leads count:', leads.length);
     
     const total = await Lead.countDocuments();
     
-    res.json({
+    const response = {
       leads,
       pagination: {
         currentPage: parseInt(page),
-        totalPages: Math.ceil(total / limit),
+        totalPages: Math.ceil(total / parseInt(limit)),
         totalItems: total,
         hasNext: skip + leads.length < total,
-        hasPrev: page > 1
+        hasPrev: parseInt(page) > 1
       }
-    });
+    };
+    
+    console.log('Sending response with', leads.length, 'leads');
+    res.json(response);
+    
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error in getLeads:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ 
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 };
 
 // GET /api/admin/get-lead/:id
 export const getLead = async (req, res) => {
   try {
-    const lead = await Lead.findById(req.params.id);
+    console.log('Getting lead by ID:', req.params.id);
+    
+    const lead = await Lead.findById(req.params.id).lean();
     if (!lead) {
+      console.log('Lead not found for ID:', req.params.id);
       return res.status(404).json({ error: 'Lead not found' });
     }
+    
+    console.log('Found lead:', lead.name);
     res.json(lead);
   } catch (error) {
+    console.error('Error in getLead:', error);
     res.status(500).json({ error: error.message });
   }
 };
