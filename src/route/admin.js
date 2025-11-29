@@ -10,6 +10,8 @@ import { uploadLeads, getLeads, getLead, updateLead, deleteLead } from '../contr
 import { getUsers, getUser, updateUserTokens } from '../controller/AdminController/userController.js';
 import { getAnalytics, getUserGrowthData, getRevenueData } from '../controller/AdminController/analyticsController.js';
 import { getAllPostsAdmin, deletePostAdmin, deleteCommentAdmin, getLeaderboardAdmin, getCommunityStatsAdmin } from '../controller/AdminController/communityController.js';
+import { awardPrizeTokens, getUserTokenStatus } from '../controller/AdminController/prizeTokenController.js';
+import { getReferralAnalytics, getReferrers, getReferredUsers, getReferrerDetails } from '../controller/AdminController/referralsController.js';
 
 const router = express.Router();
 
@@ -49,6 +51,16 @@ router.delete('/community/comment/:commentId', authenticateAdmin, deleteCommentA
 // Community data for admin dashboard
 router.get('/community/leaderboard', authenticateAdmin, getLeaderboardAdmin);
 router.get('/community/stats', authenticateAdmin, getCommunityStatsAdmin);
+
+// Prize token management
+router.post('/award-prize-tokens', authenticateAdmin, awardPrizeTokens);
+router.get('/user/:userId/token-status', authenticateAdmin, getUserTokenStatus);
+
+// Referrals management
+router.get('/referrals/analytics', authenticateAdmin, getReferralAnalytics);
+router.get('/referrals/referrers', authenticateAdmin, getReferrers);
+router.get('/referrals/referred-users', authenticateAdmin, getReferredUsers);
+router.get('/referrals/referrer/:id', authenticateAdmin, getReferrerDetails);
 
 // POST /api/admin/refresh-tokens - Manual token refresh (for testing)
 router.post('/refresh-tokens', authenticateToken, async (req, res) => {

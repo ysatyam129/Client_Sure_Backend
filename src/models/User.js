@@ -140,6 +140,49 @@ const userSchema = new mongoose.Schema({
       default: 0
     }
   },
+  dailyLimits: {
+    date: {
+      type: Date,
+      default: () => new Date().toDateString()
+    },
+    posts: {
+      type: Number,
+      default: 0,
+      max: 10
+    },
+    likes: {
+      type: Number,
+      default: 0,
+      max: 10
+    },
+    comments: {
+      type: Number,
+      default: 0,
+      max: 10
+    }
+  },
+  temporaryTokens: {
+    amount: {
+      type: Number,
+      default: 0
+    },
+    grantedAt: {
+      type: Date,
+      default: null
+    },
+    expiresAt: {
+      type: Date,
+      default: null
+    },
+    grantedBy: {
+      type: String,
+      default: null
+    },
+    prizeType: {
+      type: String,
+      default: null
+    }
+  },
   userReferenceId: {
     type: String,
     unique: true,
@@ -148,7 +191,7 @@ const userSchema = new mongoose.Schema({
   notifications: [{
     type: {
       type: String,
-      enum: ['new_post', 'new_comment', 'post_like', 'post_unlike'],
+      enum: ['new_post', 'new_comment', 'post_like', 'post_unlike', 'prize_tokens_awarded', 'system'],
       required: true
     },
     message: {
@@ -158,12 +201,12 @@ const userSchema = new mongoose.Schema({
     postId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Feedback',
-      required: true
+      required: false
     },
     fromUser: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true
+      required: false
     },
     isRead: {
       type: Boolean,

@@ -6,6 +6,7 @@ import { User } from '../../models/index.js';
 import Resource from '../../models/Resource.js';
 import { createTransporter, sendEmailWithRetry, sendPasswordResetConfirmationEmail, sendWelcomeEmail } from '../../utils/emailUtils.js';
 import { generateReferralCode, validateReferralCode, updateReferralStats } from '../../utils/referralUtils.js';
+import { calculateEffectiveTokens, cleanExpiredTokens } from '../../utils/tokenUtils.js';
 
 // Configure Cloudinary
 cloudinary.config({
@@ -546,6 +547,18 @@ export const getUserProfile = async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
+    // Clean expired tokens first
+    await cleanExpiredTokens(user);
+    
+    // Calculate effective tokens (daily + prize)
+    const effectiveTokens = calculateEffectiveTokens(user);
+    
+    // Calculate time remaining for prize tokens
+    let prizeTokenTimeRemaining = 0;
+    if (user.temporaryTokens && user.temporaryTokens.expiresAt) {
+      prizeTokenTimeRemaining = Math.max(0, new Date(user.temporaryTokens.expiresAt) - new Date());
+    }
+
     res.json({
       user: {
         _id: user._id,
@@ -561,7 +574,14 @@ export const getUserProfile = async (req, res) => {
         monthlyTotal: user.monthlyTokensTotal,
         monthlyUsed: user.monthlyTokensUsed,
         monthlyRemaining: user.monthlyTokensRemaining,
-        totalUsed: user.tokensUsedTotal
+        totalUsed: user.tokensUsedTotal,
+        // Prize token information
+        prizeTokens: user.temporaryTokens?.amount || 0,
+        prizeTokenType: user.temporaryTokens?.prizeType || null,
+        prizeTokenExpiresAt: user.temporaryTokens?.expiresAt || null,
+        prizeTokenTimeRemaining: prizeTokenTimeRemaining,
+        // Effective total tokens
+        effectiveTokens: effectiveTokens
       },
       subscription: {
         plan: user.subscription.planId ? {

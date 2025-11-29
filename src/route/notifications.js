@@ -43,9 +43,11 @@ router.get('/count', authenticateToken, async (req, res) => {
     const user = await User.findById(userId).select('unreadNotificationCount');
     
     if (!user) {
+      console.log(`❌ User ${userId} not found for notification count`);
       return res.status(404).json({ message: 'User not found' });
     }
 
+    console.log(`🔢 Notification count for user ${userId}: ${user.unreadNotificationCount || 0}`);
     res.json({ count: user.unreadNotificationCount || 0 });
   } catch (error) {
     console.error('Error fetching notification count:', error);

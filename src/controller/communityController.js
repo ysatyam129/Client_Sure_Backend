@@ -2,6 +2,7 @@ import Feedback from '../models/Feedback.js';
 import User from '../models/User.js';
 import { createNotification, notifyNewPost, markNotificationsAsRead, cleanOldNotifications } from '../utils/notificationUtils.js';
 import { uploadToCloudinary } from '../middleware/communityUpload.js';
+import { canPerformAction, incrementDailyCount, getRemainingLimits, areAllLimitsExhausted } from '../utils/dailyLimitsUtils.js';
 
 // Get trending posts
 export const getTrendingPosts = async (req, res) => {
@@ -58,6 +59,23 @@ export const createPost = async (req, res) => {
       return res.status(403).json({ message: 'Subscription expired. Community access denied.' });
     }
 
+    // Check daily post limit
+    const limitCheck = await canPerformAction(userId, 'posts');
+    if (!limitCheck.canPerform) {
+      const remainingLimits = limitCheck.remainingLimits || await getRemainingLimits(userId);
+      const allExhausted = areAllLimitsExhausted(remainingLimits);
+      
+      return res.status(429).json({
+        success: false,
+        message: allExhausted 
+          ? 'All your community limits for today have been used up.'
+          : 'Your Post limit for today is finished.',
+        limitType: 'posts',
+        remainingLimits,
+        allExhausted
+      });
+    }
+
     const postData = {
       user_id: userId,
       post_title,
@@ -94,6 +112,12 @@ export const createPost = async (req, res) => {
 
     console.log('User points updated for post creation');
     
+    // Increment daily post count
+    await incrementDailyCount(userId, 'posts');
+    
+    // Get updated remaining limits
+    const remainingLimits = await getRemainingLimits(userId);
+    
     // Notify all users about new post (async, don't wait)
     notifyNewPost(userId, savedPost._id, savedPost.post_title).catch(err => 
       console.error('Error sending new post notifications:', err)
@@ -102,7 +126,8 @@ export const createPost = async (req, res) => {
     res.status(201).json({ 
       success: true,
       message: 'Post created successfully', 
-      post: savedPost 
+      post: savedPost,
+      remainingLimits
     });
   } catch (error) {
     console.error('Error creating post:', error);
@@ -193,6 +218,23 @@ export const likePost = async (req, res) => {
     console.log('PostId:', postId);
     console.log('UserId:', userId);
 
+    // Check daily like limit
+    const limitCheck = await canPerformAction(userId, 'likes');
+    if (!limitCheck.canPerform) {
+      const remainingLimits = limitCheck.remainingLimits || await getRemainingLimits(userId);
+      const allExhausted = areAllLimitsExhausted(remainingLimits);
+      
+      return res.status(429).json({
+        success: false,
+        message: allExhausted 
+          ? 'All your community limits for today have been used up.'
+          : 'Your like limit for today is finished.',
+        limitType: 'likes',
+        remainingLimits,
+        allExhausted
+      });
+    }
+
     const post = await Feedback.findById(postId);
     if (!post) {
       return res.status(404).json({ message: 'Post not found' });
@@ -212,10 +254,20 @@ export const likePost = async (req, res) => {
     post.likes.push({ user_id: userId });
     await post.save();
 
+    // Increment daily like count
+    await incrementDailyCount(userId, 'likes');
+    
+    // Get updated remaining limits
+    const remainingLimits = await getRemainingLimits(userId);
+
     console.log('✅ Like added, total likes:', post.likes.length);
     console.log('=== LIKE REQUEST END ===');
 
-    res.json({ message: 'Post liked successfully' });
+    res.json({ 
+      success: true,
+      message: 'Post liked successfully',
+      remainingLimits
+    });
   } catch (error) {
     console.error('Like post error:', error);
     res.status(500).json({ message: 'Error liking post', error: error.message });
@@ -289,6 +341,23 @@ export const addComment = async (req, res) => {
       return res.status(403).json({ message: 'Subscription expired. Community access denied.' });
     }
 
+    // Check daily comment limit
+    const limitCheck = await canPerformAction(userId, 'comments');
+    if (!limitCheck.canPerform) {
+      const remainingLimits = limitCheck.remainingLimits || await getRemainingLimits(userId);
+      const allExhausted = areAllLimitsExhausted(remainingLimits);
+      
+      return res.status(429).json({
+        success: false,
+        message: allExhausted 
+          ? 'All your community limits for today have been used up.'
+          : 'Your comment limit for today is finished.',
+        limitType: 'comments',
+        remainingLimits,
+        allExhausted
+      });
+    }
+
     const post = await Feedback.findById(postId);
     if (!post) {
       return res.status(404).json({ message: 'Post not found' });
@@ -311,6 +380,12 @@ export const addComment = async (req, res) => {
       }
     });
 
+    // Increment daily comment count
+    await incrementDailyCount(userId, 'comments');
+    
+    // Get updated remaining limits
+    const remainingLimits = await getRemainingLimits(userId);
+
     // Notify post owner about new comment (if not commenting on own post)
     if (post.user_id.toString() !== userId) {
       const commenter = await User.findById(userId).select('name');
@@ -320,7 +395,12 @@ export const addComment = async (req, res) => {
       );
     }
 
-    res.status(201).json({ message: 'Comment added successfully', comment });
+    res.status(201).json({ 
+      success: true,
+      message: 'Comment added successfully', 
+      comment,
+      remainingLimits
+    });
   } catch (error) {
     res.status(500).json({ message: 'Error adding comment', error: error.message });
   }
@@ -527,5 +607,38 @@ export const getCommunityStats = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching community stats', error: error.message });
+  }
+};
+
+// Get user's remaining daily limits
+export const getUserDailyLimits = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    const user = await User.findById(userId);
+    if (!checkSubscriptionAccess(user)) {
+      return res.status(403).json({ message: 'Subscription expired. Community access denied.' });
+    }
+
+    const remainingLimits = await getRemainingLimits(userId);
+    
+    if (!remainingLimits) {
+      return res.status(500).json({ message: 'Error fetching limits' });
+    }
+
+    const allExhausted = areAllLimitsExhausted(remainingLimits);
+
+    res.json({
+      success: true,
+      remainingLimits,
+      allExhausted,
+      maxLimits: {
+        posts: 10,
+        likes: 10,
+        comments: 10
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching daily limits', error: error.message });
   }
 };

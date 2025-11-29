@@ -3,6 +3,8 @@ import User from '../models/User.js';
 // Create notification for users
 export const createNotification = async (userId, type, message, postId, fromUserId) => {
   try {
+    console.log(`🔔 Creating notification for user ${userId}:`, { type, message });
+    
     const notification = {
       type,
       message,
@@ -12,15 +14,21 @@ export const createNotification = async (userId, type, message, postId, fromUser
       createdAt: new Date()
     };
 
-    await User.findByIdAndUpdate(userId, {
+    const result = await User.findByIdAndUpdate(userId, {
       $push: { notifications: { $each: [notification], $position: 0 } },
       $inc: { unreadNotificationCount: 1 }
-    });
+    }, { new: true });
 
-    console.log(`Notification created for user ${userId}: ${message}`);
-    return true;
+    if (result) {
+      console.log(`✅ Notification successfully created for user ${userId}`);
+      console.log(`🔔 User now has ${result.unreadNotificationCount} unread notifications`);
+      return true;
+    } else {
+      console.log(`❌ User ${userId} not found`);
+      return false;
+    }
   } catch (error) {
-    console.error('Error creating notification:', error);
+    console.error('❌ Error creating notification:', error);
     return false;
   }
 };

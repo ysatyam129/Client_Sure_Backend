@@ -28,6 +28,29 @@ export const startTokenRefreshCron = () => {
           user.tokensUsedToday = 0;
           user.subscription.lastRefreshedAt = now;
           
+          // Reset daily community limits
+          user.dailyLimits = {
+            date: now,
+            posts: 0,
+            likes: 0,
+            comments: 0
+          };
+          
+          // Clean expired temporary tokens
+          if (user.temporaryTokens && user.temporaryTokens.expiresAt) {
+            const expiryTime = new Date(user.temporaryTokens.expiresAt);
+            if (now > expiryTime) {
+              console.log(`Clearing expired prize tokens for ${user.email}: ${user.temporaryTokens.amount} ${user.temporaryTokens.prizeType} tokens`);
+              user.temporaryTokens = {
+                amount: 0,
+                grantedAt: null,
+                expiresAt: null,
+                grantedBy: null,
+                prizeType: null
+              };
+            }
+          }
+          
           await user.save();
           refreshedCount++;
           

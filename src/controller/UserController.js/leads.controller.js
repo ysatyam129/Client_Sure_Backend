@@ -1,5 +1,6 @@
 import { Lead, User } from "../../models/index.js";
 import * as XLSX from 'xlsx';
+import { calculateEffectiveTokens, deductTokensWithPriority, cleanExpiredTokens } from '../../utils/tokenUtils.js';
 
 // GET /api/auth/leads
 export const getLeads = async (req, res) => {
@@ -79,18 +80,27 @@ export const accessLead = async (req, res) => {
       });
     }
 
-    // Check if user has enough tokens
-    if (user.tokens < 1) {
+    // Clean expired tokens first
+    await cleanExpiredTokens(user);
+
+    // Check if user has enough effective tokens (daily + prize)
+    const effectiveTokens = calculateEffectiveTokens(user);
+    if (effectiveTokens < 1) {
       return res.status(403).json({ 
         error: 'Insufficient tokens',
-        message: 'You need 1 token to access this lead'
+        message: 'You need 1 token to access this lead',
+        availableTokens: effectiveTokens
       });
     }
 
-    // Deduct 1 token
-    user.tokens -= 1;
-    user.tokensUsedToday = (user.tokensUsedToday || 0) + 1;
-    user.tokensUsedTotal = (user.tokensUsedTotal || 0) + 1;
+    // Deduct 1 token using priority system (daily first, then prize)
+    const deductionResult = await deductTokensWithPriority(user._id, 1);
+    if (!deductionResult.success) {
+      return res.status(500).json({ 
+        error: 'Token deduction failed',
+        message: 'Error processing token deduction'
+      });
+    }
 
     // Add to accessed leads history
     if (!user.accessedLeads) {
@@ -133,7 +143,11 @@ export const accessLead = async (req, res) => {
         country: lead.country,
         category: lead.category
       },
-      tokensRemaining: user.tokens
+      tokensRemaining: deductionResult.totalRemaining,
+      tokenBreakdown: {
+        dailyTokens: deductionResult.remainingDaily,
+        prizeTokens: deductionResult.remainingTemporary
+      }
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -249,20 +263,28 @@ export const bulkAccessLeads = async (req, res) => {
       });
     }
 
-    // Check if user has enough tokens
-    if (user.tokens < tokensRequired) {
+    // Clean expired tokens first
+    await cleanExpiredTokens(user);
+
+    // Check if user has enough effective tokens (daily + prize)
+    const effectiveTokens = calculateEffectiveTokens(user);
+    if (effectiveTokens < tokensRequired) {
       return res.status(403).json({ 
         error: 'Insufficient tokens',
         required: tokensRequired,
-        available: user.tokens,
+        available: effectiveTokens,
         message: `You need ${tokensRequired} tokens to access these leads`
       });
     }
 
-    // Deduct tokens
-    user.tokens -= tokensRequired;
-    user.tokensUsedToday = (user.tokensUsedToday || 0) + tokensRequired;
-    user.tokensUsedTotal = (user.tokensUsedTotal || 0) + tokensRequired;
+    // Deduct tokens using priority system (daily first, then prize)
+    const deductionResult = await deductTokensWithPriority(user._id, tokensRequired);
+    if (!deductionResult.success) {
+      return res.status(500).json({ 
+        error: 'Token deduction failed',
+        message: 'Error processing token deduction'
+      });
+    }
 
     // Add to accessed leads history
     if (!user.accessedLeads) {
@@ -318,7 +340,11 @@ export const bulkAccessLeads = async (req, res) => {
         category: lead.category
       })),
       tokensUsed: tokensRequired,
-      tokensRemaining: user.tokens,
+      tokensRemaining: deductionResult.totalRemaining,
+      tokenBreakdown: {
+        dailyTokens: deductionResult.remainingDaily,
+        prizeTokens: deductionResult.remainingTemporary
+      },
       alreadyAccessed: leads.length - newLeads.length
     });
   } catch (error) {

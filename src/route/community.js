@@ -11,7 +11,8 @@ import {
   getAllPosts,
   getLeaderboard,
   getTrendingPosts,
-  getCommunityStats
+  getCommunityStats,
+  getUserDailyLimits
 } from '../controller/communityController.js';
 
 const router = express.Router();
@@ -45,5 +46,8 @@ router.get('/leaderboard', authenticateToken, getLeaderboard);
 
 // GET /api/community/stats
 router.get('/stats', authenticateToken, getCommunityStats);
+
+// GET /api/community/daily-limits
+router.get('/daily-limits', authenticateToken, getUserDailyLimits);
 
 export default router;
