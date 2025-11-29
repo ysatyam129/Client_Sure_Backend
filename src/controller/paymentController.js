@@ -138,6 +138,26 @@ export const createOrder = async (req, res) => {
       await sendWelcomeEmail(user, resetToken, planInfo);
     } else {
       console.log('User already exists:', email);
+      // Update existing user's subscription for new plan purchase
+      const monthlyAllocation = plan.durationDays * plan.dailyTokens;
+      const startDate = new Date();
+      const endDate = new Date(startDate.getTime() + (plan.durationDays * 24 * 60 * 60 * 1000));
+      
+      user.subscription = {
+        planId: plan._id,
+        startDate: startDate,
+        endDate: endDate,
+        isActive: true,
+        dailyTokens: plan.dailyTokens,
+        monthlyAllocation: monthlyAllocation
+      };
+      user.tokens = plan.dailyTokens;
+      user.monthlyTokensTotal = monthlyAllocation;
+      user.monthlyTokensUsed = 0;
+      user.monthlyTokensRemaining = monthlyAllocation;
+      
+      await user.save();
+      console.log('Updated existing user subscription:', user.email);
     }
 
     // Create local Order with pending status - use actual plan price

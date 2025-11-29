@@ -19,6 +19,11 @@ const planSchema = new mongoose.Schema({
     required: true,
     default: 100
   },
+  bonusTokens: {
+    type: Number,
+    required: false,
+    default: 0
+  },
   totalPlanTokens: {
     type: Number,
     required: false
