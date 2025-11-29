@@ -2,6 +2,7 @@ import express from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { User } from '../models/index.js'
 import { addSocialAccount, deleteSocialAccount, getSocialAccounts } from '../controller/UserController.js/socialAccountController.js';
+import { getPlanStatus } from '../controller/UserController.js/planController.js';
 
 
 const router = express.Router();
@@ -64,6 +65,12 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
 router.get('/social-accounts', authenticateToken, getSocialAccounts);
 router.post('/social-accounts', authenticateToken, addSocialAccount);
 router.delete('/social-accounts/:id', authenticateToken, deleteSocialAccount);
+
+// GET /api/user/plan-status - Get user's plan status (protected)
+router.get('/plan-status', authenticateToken, async (req, res) => {
+  req.params.userId = req.user.id;
+  await getPlanStatus(req, res);
+});
 
 
 export default router;
