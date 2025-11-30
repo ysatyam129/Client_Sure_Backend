@@ -44,7 +44,16 @@ router.get('/dummy-checkout', (req, res) => {
 
         <script>
             function simulatePayment(status) {
-                const webhookUrl = 'http://localhost:5000/api/payments/webhook';
+                // Dynamic URLs based on environment
+                const isProduction = window.location.hostname !== 'localhost';
+                const backendUrl = isProduction 
+                    ? 'https://client-sure-backend.vercel.app'
+                    : 'http://localhost:5000';
+                const frontendUrl = isProduction 
+                    ? 'https://client-sure-frontend.vercel.app'
+                    : 'http://localhost:3000';
+                
+                const webhookUrl = `${backendUrl}/api/payments/webhook`;
                 
                 if (status === 'success') {
                     // Simulate successful payment webhook
@@ -68,7 +77,7 @@ router.get('/dummy-checkout', (req, res) => {
                         if (response.ok) {
                             alert('Payment Successful! Redirecting...');
                             const userEmail = localStorage.getItem('pendingUserEmail') || 'test@example.com';
-                            window.location.href = 'http://localhost:3000/payment-success?email=' + encodeURIComponent(userEmail);
+                            window.location.href = `${frontendUrl}/payment-success?email=` + encodeURIComponent(userEmail);
                         } else {
                             alert('Payment processing failed');
                         }
@@ -78,7 +87,7 @@ router.get('/dummy-checkout', (req, res) => {
                     });
                 } else {
                     alert('Payment Failed! Please try again.');
-                    window.location.href = 'http://localhost:3000/';
+                    window.location.href = frontendUrl;
                 }
             }
         </script>

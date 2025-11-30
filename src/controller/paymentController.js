@@ -175,9 +175,13 @@ export const createOrder = async (req, res) => {
     });
     console.log('Order created with amount:', order.amount);
 
-    // Create payment payload
+    // Create payment payload with dynamic URL
+    const baseUrl = process.env.NODE_ENV === 'production' 
+      ? process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://client-sure-backend.vercel.app'
+      : `http://localhost:${process.env.PORT || 5000}`;
+    
     const paymentPayload = {
-      checkoutUrl: `http://localhost:${process.env.PORT || 5000}/dummy-checkout?order=${order.clientOrderId}`,
+      checkoutUrl: `${baseUrl}/dummy-checkout?order=${order.clientOrderId}`,
       checkoutToken: `dummy-token-${Date.now()}`,
       orderAmount: plan.price,
       userEmail: email.toLowerCase().trim(),
