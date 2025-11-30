@@ -29,11 +29,6 @@
     "CLOUDINARY_API_SECRET": "@cloudinary-api-secret",
     "GEMINI_API_KEY": "@gemini-api-key"
   },
-  "functions": {
-    "src/index.js": {
-      "maxDuration": 30
-    }
-  },
   "headers": [
     {
       "source": "/api/(.*)",
