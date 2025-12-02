@@ -207,6 +207,8 @@ export const login = async (req, res) => {
     // Return user info
     res.json({
       user: {
+
+
         id: user._id,
         name: user.name,
         email: user.email,
@@ -218,7 +220,10 @@ export const login = async (req, res) => {
           endDate: user.subscription.endDate,
           isActive: user.subscription.endDate > now
         }
-      }
+
+      },
+      userToken: token
+      
     });
 
   } catch (error) {
