@@ -171,6 +171,7 @@ export const createOrder = async (req, res) => {
       planId: plan._id,
       amount: plan.price, // Always use plan price from database
       status: 'pending',
+      type: 'subscription',
       referralCode: referralCode || null
     });
     console.log('Order created with amount:', order.amount);
@@ -192,8 +193,9 @@ export const createOrder = async (req, res) => {
 
     // Return response
     res.json({
+      success: true,
       clientOrderId: order.clientOrderId,
-      paymentPayload,
+      payload: paymentPayload,
       user: {
         id: user._id,
         name: user.name,

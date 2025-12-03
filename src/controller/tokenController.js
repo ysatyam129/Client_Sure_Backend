@@ -124,8 +124,12 @@ export const createTokenPurchase = async (req, res) => {
     await transaction.save({ session });
 
     // Create payment order (using dummy payment system)
+    const baseUrl = process.env.NODE_ENV === 'production' 
+      ? process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://client-sure-backend.vercel.app'
+      : `http://localhost:${process.env.PORT || 5000}`;
+    
     const paymentPayload = {
-      checkoutUrl: `http://localhost:${process.env.PORT || 5000}/dummy-token-checkout?transaction=${transaction.transactionId}`,
+      checkoutUrl: `${baseUrl}/api/dummy-token-checkout?transaction=${transaction.transactionId}`,
       checkoutToken: `token-${Date.now()}`,
       orderAmount: tokenPackage.price,
       userEmail: user.email,

@@ -2,12 +2,26 @@ import express from 'express';
 
 const router = express.Router();
 
-// GET /dummy-checkout - Dummy payment page
-router.get('/dummy-checkout', (req, res) => {
+// GET /api/dummy-checkout - Dummy payment page
+router.get('/dummy-checkout', async (req, res) => {
   const { order } = req.query;
   
   if (!order) {
     return res.status(400).send('Missing order parameter');
+  }
+
+  // Get order details to show correct amount
+  let orderAmount = 299;
+  let orderType = 'subscription';
+  try {
+    const { Order } = await import('../models/index.js');
+    const orderDoc = await Order.findOne({ clientOrderId: order });
+    if (orderDoc) {
+      orderAmount = orderDoc.amount;
+      orderType = orderDoc.type || 'subscription';
+    }
+  } catch (error) {
+    console.log('Could not fetch order details:', error.message);
   }
 
   // Simple HTML page for dummy payment
@@ -70,7 +84,8 @@ router.get('/dummy-checkout', (req, res) => {
                                 clientOrderId: '${order}',
                                 email: localStorage.getItem('pendingUserEmail') || 'test@example.com',
                                 name: localStorage.getItem('pendingUserName') || 'Test User',
-                                amount: 299
+                                amount: ${orderAmount},
+                                orderType: '${orderType}'
                             }
                         })
                     }).then(response => {

@@ -85,7 +85,8 @@ app.use(
             "Access-Control-Request-Method",
             "Access-Control-Request-Headers",
             "Cache-Control",
-            "Pragma"
+            "Pragma",
+            "x-signature"
         ],
         exposedHeaders: [
             "Access-Control-Allow-Origin",

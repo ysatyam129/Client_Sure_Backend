@@ -36,6 +36,11 @@ const orderSchema = new mongoose.Schema({
     enum: ['pending', 'completed', 'failed', 'cancelled'],
     default: 'pending'
   },
+  type: {
+    type: String,
+    enum: ['subscription', 'token'],
+    default: 'subscription'
+  },
   referralCode: {
     type: String,
     required: false,
