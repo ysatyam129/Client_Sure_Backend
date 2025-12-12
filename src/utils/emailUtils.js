@@ -224,6 +224,36 @@ export const sendWelcomeEmail = async (user, resetToken, planInfo = null) => {
 };
 
 /**
+ * Send email utility function
+ * @param {string} to - Recipient email
+ * @param {string} subject - Email subject
+ * @param {string} html - Email HTML content
+ * @returns {Promise<boolean>} Success status
+ */
+export const sendEmail = async (to, subject, html) => {
+  try {
+    const transporter = createTransporter();
+    if (!transporter) {
+      throw new Error('Email transporter not available');
+    }
+
+    const mailOptions = {
+      from: `"ClientSure" <${process.env.SMTP_USER}>`,
+      to,
+      subject,
+      html
+    };
+
+    await sendEmailWithRetry(transporter, mailOptions);
+    console.log(`Email sent to ${to}`);
+    return true;
+  } catch (error) {
+    console.error('Send email error:', error);
+    return false;
+  }
+};
+
+/**
  * Send repurchase email when user runs out of tokens
  * @param {object} user - User object
  * @returns {Promise<boolean>} Success status

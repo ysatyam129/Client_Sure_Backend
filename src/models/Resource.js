@@ -19,10 +19,16 @@ const resourceSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  cloudinaryPublicId: {
+    type: String
+  },
   content: {
     type: String
   },
   thumbnailUrl: {
+    type: String
+  },
+  previewUrl: {
     type: String
   },
   isActive: {

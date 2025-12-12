@@ -38,7 +38,8 @@ export const authenticateToken = async (req, res, next) => {
 
     // Check if subscription is still active
     const now = new Date();
-    if (user.subscription.endDate && user.subscription.endDate < now) {
+    const endDate = new Date(user.subscription.endDate);
+    if (user.subscription.endDate && endDate < now) {
       return res.status(401).json({ error: "Subscription expired" });
     }
 

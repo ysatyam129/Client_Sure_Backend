@@ -6,10 +6,10 @@ import { excelUpload } from '../middleware/excelUpload.js';
 import { manualTokenRefresh, manualSubscriptionCheck } from '../services/cronJobs.js';
 import { adminLogin, adminLogout } from '../controller/AdminController/authController.js';
 import { createResource, getResources, getResource, updateResource, deleteResource } from '../controller/AdminController/resourceController.js';
-import { uploadLeads, getLeads, getLead, updateLead, deleteLead } from '../controller/AdminController/leadController.js';
+import { uploadLeads, getLeads, getLead, updateLead, deleteLead, bulkDeleteLeads } from '../controller/AdminController/leadController.js';
 import { getUsers, getUser, updateUserTokens } from '../controller/AdminController/userController.js';
 import { getAnalytics, getUserGrowthData, getRevenueData } from '../controller/AdminController/analyticsController.js';
-import { getAllPostsAdmin, deletePostAdmin, deleteCommentAdmin, getLeaderboardAdmin, getCommunityStatsAdmin, fixLeaderboardSync } from '../controller/AdminController/communityController.js';
+import { getAllPostsAdmin, deletePostAdmin, deleteCommentAdmin, getLeaderboardAdmin, getCommunityStatsAdmin, fixLeaderboardSync, getUserPrizeHistory, getAllPrizeHistory } from '../controller/AdminController/communityController.js';
 import { awardPrizeTokens, getUserTokenStatus } from '../controller/AdminController/prizeTokenController.js';
 import { getReferralAnalytics, getReferrers, getReferredUsers, getReferrerDetails } from '../controller/AdminController/referralsController.js';
 
@@ -36,6 +36,7 @@ router.post('/leads/upload', authenticateAdmin, excelUpload.single('file'), uplo
 router.get('/leads', authenticateAdmin, getLeads);
 router.get('/get-lead/:id', authenticateAdmin, getLead);
 router.put('/update-leads/:id', authenticateAdmin, updateLead);
+router.delete('/leads/bulk-delete', authenticateAdmin, bulkDeleteLeads);
 router.delete('/leads/:id', authenticateAdmin, deleteLead);
 
 // Analytics operations
@@ -52,6 +53,8 @@ router.delete('/community/comment/:commentId', authenticateAdmin, deleteCommentA
 router.get('/community/leaderboard', authenticateAdmin, getLeaderboardAdmin);
 router.get('/community/stats', authenticateAdmin, getCommunityStatsAdmin);
 router.post('/community/fix-sync', authenticateAdmin, fixLeaderboardSync);
+router.get('/community/user/:userId/prize-history', authenticateAdmin, getUserPrizeHistory);
+router.get('/community/prize-history/all', authenticateAdmin, getAllPrizeHistory);
 
 // Prize token management
 router.post('/award-prize-tokens', authenticateAdmin, awardPrizeTokens);
@@ -62,6 +65,21 @@ router.get('/referrals/analytics', authenticateAdmin, getReferralAnalytics);
 router.get('/referrals/referrers', authenticateAdmin, getReferrers);
 router.get('/referrals/referred-users', authenticateAdmin, getReferredUsers);
 router.get('/referrals/referrer/:id', authenticateAdmin, getReferrerDetails);
+
+// Referral Rewards management
+import { getReferralRewards, awardReferralReward, getReferralRewardAnalytics } from '../controller/AdminController/referralRewardController.js';
+router.get('/referral-rewards', authenticateAdmin, getReferralRewards);
+router.post('/referral-rewards/award', authenticateAdmin, awardReferralReward);
+router.get('/referral-rewards/analytics', authenticateAdmin, getReferralRewardAnalytics);
+
+// Prize management
+import { getPrizeTemplates, createPrizeTemplate, getFilteredLeaderboard, distributePrizes, getPrizeHistory, getPrizeAnalytics } from '../controller/AdminController/prizeController.js';
+router.get('/prize-templates', authenticateAdmin, getPrizeTemplates);
+router.post('/prize-templates', authenticateAdmin, createPrizeTemplate);
+router.get('/leaderboard/filtered', authenticateAdmin, getFilteredLeaderboard);
+router.post('/distribute-prizes', authenticateAdmin, distributePrizes);
+router.get('/prize-history', authenticateAdmin, getPrizeHistory);
+router.get('/prize-analytics', authenticateAdmin, getPrizeAnalytics);
 
 // POST /api/admin/refresh-tokens - Manual token refresh (for testing)
 router.post('/refresh-tokens', authenticateToken, async (req, res) => {

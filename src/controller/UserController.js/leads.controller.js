@@ -8,19 +8,51 @@ import { createTransporter, sendEmailWithRetry } from '../../utils/emailUtils.js
 export const getLeads = async (req, res) => {
   try {
     const userId = req.user.userId;
-    const { page = 1, limit = 20 } = req.query;
+    const { page = 1, limit = 20, category, city, country, startDate, endDate } = req.query;
     const skip = (page - 1) * limit;
 
-    const leads = await Lead.find({ isActive: true })
+    // Get user's accessed leads first
+    const user = await User.findById(userId).select('accessedLeads');
+    const accessedLeadIds = user?.accessedLeads?.map(item => item.leadId.toString()) || [];
+
+    // Build query - only active leads that user hasn't accessed
+    let query = { 
+      isActive: true,
+      _id: { $nin: accessedLeadIds } // Exclude accessed leads
+    };
+
+    // Apply filters
+    if (category) {
+      query.category = category;
+    }
+    if (city) {
+      query.city = city;
+    }
+    if (country) {
+      query.country = country;
+    }
+
+    // Date range filter
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        query.createdAt.$gte = start;
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = end;
+      }
+    }
+
+    const leads = await Lead.find(query)
       .sort({ uploadSequence: -1, createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
 
-    // Get user's accessed leads
-    const user = await User.findById(userId).select('accessedLeads');
-    const accessedLeadIds = user?.accessedLeads?.map(item => item.leadId.toString()) || [];
-
-    const total = await Lead.countDocuments({ isActive: true });
+    const total = await Lead.countDocuments(query);
 
     res.json({
       leads: leads.map(lead => ({
@@ -42,7 +74,7 @@ export const getLeads = async (req, res) => {
         isActive: lead.isActive,
         createdAt: lead.createdAt,
         updatedAt: lead.updatedAt,
-        isAccessedByUser: accessedLeadIds.includes(lead._id.toString())
+        isAccessedByUser: false // All leads here are locked
       })),
       pagination: {
         currentPage: parseInt(page),
@@ -700,6 +732,29 @@ export const getEmailFeedback = async (req, res) => {
         hasNext: skip + emailFeedbacks.length < total,
         hasPrev: page > 1
       }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+
+// GET /api/auth/leads/filter-options
+export const getFilterOptions = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const user = await User.findById(userId).select('accessedLeads');
+    const accessedLeadIds = user?.accessedLeads?.map(item => item.leadId.toString()) || [];
+    
+    const query = { isActive: true, _id: { $nin: accessedLeadIds } };
+    const categories = await Lead.distinct('category', query);
+    const cities = await Lead.distinct('city', query);
+    const countries = await Lead.distinct('country', query);
+
+    res.json({
+      categories: categories.filter(Boolean).sort(),
+      cities: cities.filter(Boolean).sort(),
+      countries: countries.filter(Boolean).sort()
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

@@ -1,5 +1,6 @@
 import { User } from '../models/index.js';
 import { validateReferralCode, getMilestoneProgress } from '../utils/referralUtils.js';
+import { checkReferralMilestone } from './AdminController/referralRewardController.js';
 
 // GET /api/referrals/validate/:code
 export const validateReferral = async (req, res) => {
@@ -45,6 +46,15 @@ export const getMyReferrals = async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
+    // Check for referral milestone (8+ referrals)
+    const referralCount = user.referrals?.length || 0;
+    if (referralCount >= 8) {
+      // Trigger milestone check in background
+      checkReferralMilestone(userId).catch(err => 
+        console.error('Milestone check error:', err)
+      );
+    }
+
     res.json({
       referralCode: user.referralCode,
       stats: user.referralStats,
@@ -66,17 +76,29 @@ export const getReferralStats = async (req, res) => {
   try {
     const userId = req.user.userId;
     
-    const user = await User.findById(userId).select('referralStats referralCode');
+    const user = await User.findById(userId)
+      .populate('referrals')
+      .select('referralStats referralCode referrals');
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
+    const referralCount = user.referrals?.length || 0;
+    
+    // Check for referral milestone (8+ referrals)
+    if (referralCount >= 8) {
+      // Trigger milestone check in background
+      checkReferralMilestone(userId).catch(err => 
+        console.error('Milestone check error:', err)
+      );
+    }
+
     res.json({
       referralCode: user.referralCode,
-      totalReferrals: user.referralStats.totalReferrals,
-      activeReferrals: user.referralStats.activeReferrals,
-      totalEarnings: user.referralStats.totalEarnings
+      totalReferrals: referralCount,
+      activeReferrals: user.referralStats?.activeReferrals || 0,
+      totalEarnings: user.referralStats?.totalEarnings || 0
     });
   } catch (error) {
     console.error('Get referral stats error:', error);

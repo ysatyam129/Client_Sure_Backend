@@ -1,5 +1,6 @@
 import Feedback from '../../models/Feedback.js';
 import User from '../../models/User.js';
+import PrizeDistribution from '../../models/PrizeDistribution.js';
 
 // Get all posts for admin moderation
 export const getAllPostsAdmin = async (req, res) => {
@@ -160,10 +161,36 @@ export const getLeaderboardAdmin = async (req, res) => {
   try {
     console.log('Admin fetching leaderboard...');
     
-    const leaderboard = await User.find({ points: { $gt: 0 } })
-      .select('name avatar points communityActivity')
+    const users = await User.find({ points: { $gt: 0 } })
+      .select('name email avatar points communityActivity temporaryTokens')
       .sort({ points: -1 })
       .limit(50);
+
+    const now = new Date();
+    const leaderboard = users.map(user => {
+      const hasActiveTokens = user.temporaryTokens?.expiresAt && new Date(user.temporaryTokens.expiresAt) > now;
+      const timeUntilExpiry = hasActiveTokens 
+        ? Math.ceil((new Date(user.temporaryTokens.expiresAt) - now) / (1000 * 60 * 60)) 
+        : 0;
+
+      return {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar,
+        points: user.points,
+        communityActivity: user.communityActivity,
+        prizeTokenStatus: {
+          hasActiveTokens,
+          currentTokens: hasActiveTokens ? user.temporaryTokens.amount : 0,
+          expiresAt: hasActiveTokens ? user.temporaryTokens.expiresAt : null,
+          prizeType: hasActiveTokens ? user.temporaryTokens.prizeType : null,
+          grantedAt: hasActiveTokens ? user.temporaryTokens.grantedAt : null,
+          grantedBy: hasActiveTokens ? user.temporaryTokens.grantedBy : null,
+          timeUntilExpiry: hasActiveTokens ? `${timeUntilExpiry}h` : null
+        }
+      };
+    });
 
     console.log(`Found ${leaderboard.length} users in leaderboard`);
     res.json({ 
@@ -211,6 +238,144 @@ export const getCommunityStatsAdmin = async (req, res) => {
       success: false,
       message: 'Error fetching community stats', 
       error: error.message 
+    });
+  }
+};
+
+// Get prize history for a specific user
+export const getUserPrizeHistory = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const history = await PrizeDistribution.find({ userId })
+      .sort({ awardedAt: -1 })
+      .limit(10);
+    
+    const totalAwarded = history.reduce((sum, prize) => sum + prize.tokenAmount, 0);
+    
+    res.json({
+      success: true,
+      history,
+      totalAwarded,
+      count: history.length
+    });
+  } catch (error) {
+    console.error('Error fetching user prize history:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching prize history',
+      error: error.message
+    });
+  }
+};
+
+// Get complete prize history for all users
+export const getAllPrizeHistory = async (req, res) => {
+  try {
+    const { page = 1, limit = 50 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Get all prize distributions with user details
+    const history = await PrizeDistribution.find()
+      .populate('userId', 'name email temporaryTokens')
+      .sort({ awardedAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await PrizeDistribution.countDocuments();
+
+    // Calculate summary statistics
+    const allPrizes = await PrizeDistribution.find();
+    const uniqueUsers = new Set(allPrizes.map(p => p.userId.toString()));
+    const totalTokensDistributed = allPrizes.reduce((sum, p) => sum + p.tokenAmount, 0);
+    
+    // Calculate active tokens
+    const users = await User.find({ 'temporaryTokens.amount': { $gt: 0 } })
+      .select('temporaryTokens');
+    const now = new Date();
+    const activeTokensNow = users.reduce((sum, user) => {
+      if (user.temporaryTokens?.expiresAt && new Date(user.temporaryTokens.expiresAt) > now) {
+        return sum + user.temporaryTokens.amount;
+      }
+      return sum;
+    }, 0);
+
+    // Breakdown by position
+    const breakdown = {
+      firstPrize: {
+        count: allPrizes.filter(p => p.position === 1).length,
+        totalTokens: allPrizes.filter(p => p.position === 1).reduce((sum, p) => sum + p.tokenAmount, 0)
+      },
+      secondPrize: {
+        count: allPrizes.filter(p => p.position === 2).length,
+        totalTokens: allPrizes.filter(p => p.position === 2).reduce((sum, p) => sum + p.tokenAmount, 0)
+      },
+      thirdPrize: {
+        count: allPrizes.filter(p => p.position === 3).length,
+        totalTokens: allPrizes.filter(p => p.position === 3).reduce((sum, p) => sum + p.tokenAmount, 0)
+      }
+    };
+
+    // Format history with status
+    const formattedHistory = history.map(prize => {
+      const user = prize.userId;
+      let status = 'claimed';
+      let timeRemaining = null;
+
+      if (user?.temporaryTokens?.expiresAt) {
+        const expiryDate = new Date(user.temporaryTokens.expiresAt);
+        if (expiryDate > now) {
+          status = 'active';
+          const hoursRemaining = Math.ceil((expiryDate - now) / (1000 * 60 * 60));
+          timeRemaining = `${hoursRemaining}h`;
+        } else {
+          status = 'expired';
+        }
+      }
+
+      return {
+        _id: prize._id,
+        user: {
+          _id: user._id,
+          name: user.name,
+          email: user.email
+        },
+        position: prize.position,
+        tokenAmount: prize.tokenAmount,
+        period: prize.period,
+        contestName: prize.contestName,
+        dateRange: prize.dateRange,
+        awardedAt: prize.awardedAt,
+        awardedBy: prize.awardedBy,
+        status,
+        expiresAt: user?.temporaryTokens?.expiresAt || null,
+        timeRemaining
+      };
+    });
+
+    res.json({
+      success: true,
+      summary: {
+        totalUsersRewarded: uniqueUsers.size,
+        totalTokensDistributed,
+        totalAwardsGiven: allPrizes.length,
+        activeTokensNow,
+        breakdown
+      },
+      history: formattedHistory,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching all prize history:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching prize history',
+      error: error.message
     });
   }
 };

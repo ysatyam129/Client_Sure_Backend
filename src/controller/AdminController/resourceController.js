@@ -18,31 +18,52 @@ export const createResource = async (req, res) => {
       return res.status(400).json({ error: 'File is required' });
     }
 
-    // Upload to Cloudinary from buffer
+    console.log('Uploading file:', { type, mimetype: file.mimetype, size: file.size });
+
+    // Upload to Cloudinary from buffer with auto resource type
     const result = await new Promise((resolve, reject) => {
       cloudinary.uploader.upload_stream(
         {
           resource_type: 'auto',
-          folder: 'resources'
+          folder: 'resources',
+          public_id: `${type}_${Date.now()}`,
+          flags: type === 'pdf' ? 'attachment' : undefined
         },
         (error, result) => {
-          if (error) reject(error);
-          else resolve(result);
+          if (error) {
+            console.error('Cloudinary upload error:', error);
+            reject(error);
+          } else {
+            console.log('Cloudinary upload success:', result.secure_url);
+            resolve(result);
+          }
         }
       ).end(file.buffer);
     });
+
+    // Generate proper URLs for different file types
+    let thumbnailUrl = result.secure_url;
+    
+    if (type === 'pdf') {
+      // Generate PDF thumbnail using Cloudinary transformation
+      thumbnailUrl = `https://res.cloudinary.com/${process.env.CLOUDINARY_CLOUD_NAME}/image/upload/f_jpg,q_auto,w_300,h_400,c_fit/${result.public_id}.jpg`;
+    }
 
     const resource = new Resource({
       title,
       description,
       type,
       url: result.secure_url,
-      thumbnailUrl: result.secure_url
+      thumbnailUrl: thumbnailUrl,
+      previewUrl: result.secure_url,
+      cloudinaryPublicId: result.public_id
     });
 
     await resource.save();
+    console.log('Resource saved:', resource._id);
     res.status(201).json(resource);
   } catch (error) {
+    console.error('Create resource error:', error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -93,7 +114,9 @@ export const updateResource = async (req, res) => {
         cloudinary.uploader.upload_stream(
           {
             resource_type: 'auto',
-            folder: 'resources'
+            folder: 'resources',
+            public_id: `${resource.type}_${Date.now()}`,
+            flags: resource.type === 'pdf' ? 'attachment' : undefined
           },
           (error, result) => {
             if (error) reject(error);
@@ -101,8 +124,15 @@ export const updateResource = async (req, res) => {
           }
         ).end(file.buffer);
       });
+      
       resource.url = result.secure_url;
-      resource.thumbnailUrl = result.secure_url;
+      resource.cloudinaryPublicId = result.public_id;
+      
+      if (resource.type === 'pdf') {
+        resource.thumbnailUrl = `https://res.cloudinary.com/${process.env.CLOUDINARY_CLOUD_NAME}/image/upload/f_jpg,q_auto,w_300,h_400,c_fit/${result.public_id}.jpg`;
+      } else {
+        resource.thumbnailUrl = result.secure_url;
+      }
     }
 
     await resource.save();

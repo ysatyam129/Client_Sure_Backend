@@ -571,28 +571,64 @@ export const getAllPosts = async (req, res) => {
   }
 };
 
-// Get leaderboard with user rank
-// Get leaderboard with user rank
+// Get leaderboard with professional filtering
 export const getLeaderboard = async (req, res) => {
   try {
     const userId = req.user.id;
+    const { limit = 10, includeCurrentUser = false } = req.query;
     
     const user = await User.findById(userId);
     if (!checkSubscriptionAccess(user)) {
       return res.status(403).json({ message: 'Subscription expired. Community access denied.' });
     }
 
-    const leaderboard = await User.find({ points: { $gt: 0 } })
+    // Get top users (default 10)
+    const topUsers = await User.find({ points: { $gt: 0 } })
       .select('name avatar points communityActivity')
       .sort({ points: -1 })
-      .limit(50);
+      .limit(parseInt(limit));
 
-    // Get current user rank
-    const userRank = await User.countDocuments({ 
+    // Check if current user is in top users
+    const currentUserInTop = topUsers.some(topUser => topUser._id.toString() === userId);
+    
+    let response = {
+      topUsers
+    };
+
+    // If includeCurrentUser is true and user is not in top 10, get their rank
+    if (includeCurrentUser === 'true' && !currentUserInTop) {
+      // Get current user's rank
+      const userRank = await User.countDocuments({ 
+        points: { $gt: user.points } 
+      }) + 1;
+      
+      // Get total number of users with points
+      const totalUsers = await User.countDocuments({ points: { $gt: 0 } });
+      
+      // Only include current user rank if they're not in top users
+      if (userRank > parseInt(limit)) {
+        response.currentUserRank = {
+          user: {
+            _id: user._id,
+            name: user.name,
+            avatar: user.avatar,
+            points: user.points,
+            communityActivity: user.communityActivity
+          },
+          rank: userRank,
+          totalUsers
+        };
+      }
+    }
+
+    // Backward compatibility - also send old format
+    response.leaderboard = topUsers;
+    response.userRank = await User.countDocuments({ 
       points: { $gt: user.points } 
     }) + 1;
+    response.userPoints = user.points;
 
-    res.json({ leaderboard, userRank, userPoints: user.points });
+    res.json(response);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching leaderboard', error: error.message });
   }

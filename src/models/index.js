@@ -7,6 +7,9 @@ import Feedback from './Feedback.js';
 import EmailFeedback from './EmailFeedback.js';
 import TokenPackage from './TokenPackage.js';
 import TokenTransaction from './TokenTransaction.js';
+import PrizeDistribution from './PrizeDistribution.js';
+import PrizeTemplate from './PrizeTemplate.js';
+import ReferralReward from './ReferralReward.js';
 
 export {
   User,
@@ -17,5 +20,8 @@ export {
   Feedback,
   EmailFeedback,
   TokenPackage,
-  TokenTransaction
+  TokenTransaction,
+  PrizeDistribution,
+  PrizeTemplate,
+  ReferralReward
 };

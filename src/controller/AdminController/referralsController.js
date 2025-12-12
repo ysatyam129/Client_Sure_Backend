@@ -102,28 +102,59 @@ export const getReferrers = async (req, res) => {
     const referrers = await User.find(matchQuery)
       .populate('referrals.userId', 'name email subscription createdAt')
       .populate('subscription.planId', 'name price')
-      .select('name email referralCode referralStats referrals subscription createdAt')
+      .select('name email referralCode referralStats referrals subscription createdAt milestoneRewards temporaryTokens')
       .sort({ 'referralStats.totalReferrals': -1 })
       .skip(skip)
       .limit(parseInt(limit));
 
     const total = await User.countDocuments(matchQuery);
 
-    const formattedReferrers = referrers.map(user => ({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      referralCode: user.referralCode,
-      referralStats: user.referralStats,
-      subscription: {
-        planName: user.subscription.planId?.name || 'No Plan',
-        isActive: user.subscription.isActive,
-        endDate: user.subscription.endDate
-      },
-      joinedAt: user.createdAt,
-      referralsCount: user.referrals.length,
-      activeReferralsCount: user.referrals.filter(r => r.isActive).length
-    }));
+    const formattedReferrers = referrers.map(user => {
+      const now = new Date();
+      const hasActiveTokens = user.temporaryTokens?.expiresAt && new Date(user.temporaryTokens.expiresAt) > now;
+      const timeUntilExpiry = hasActiveTokens 
+        ? Math.ceil((new Date(user.temporaryTokens.expiresAt) - now) / (1000 * 60 * 60)) 
+        : 0;
+
+      return {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        referralCode: user.referralCode,
+        referralStats: user.referralStats,
+        subscription: {
+          planName: user.subscription.planId?.name || 'No Plan',
+          isActive: user.subscription.isActive,
+          endDate: user.subscription.endDate
+        },
+        joinedAt: user.createdAt,
+        referralsCount: user.referrals.length,
+        activeReferralsCount: user.referrals.filter(r => r.isActive).length,
+        milestoneRewards: user.milestoneRewards || {
+          referral8Cycles: 0,
+          referral15Cycles: 0,
+          referral25Cycles: 0,
+          totalTokensEarned: 0,
+          referral8LastReset: null,
+          referral15LastReset: null,
+          referral25LastReset: null
+        },
+        temporaryTokens: hasActiveTokens ? {
+          amount: user.temporaryTokens.amount,
+          grantedAt: user.temporaryTokens.grantedAt,
+          expiresAt: user.temporaryTokens.expiresAt,
+          prizeType: user.temporaryTokens.prizeType,
+          timeUntilExpiry: `${timeUntilExpiry}h`
+        } : null,
+        computed: {
+          totalCycles: (user.milestoneRewards?.referral8Cycles || 0) + 
+                      (user.milestoneRewards?.referral15Cycles || 0) + 
+                      (user.milestoneRewards?.referral25Cycles || 0),
+          hasActiveTokens,
+          milestoneBreakdown: `8×${user.milestoneRewards?.referral8Cycles || 0}, 15×${user.milestoneRewards?.referral15Cycles || 0}, 25×${user.milestoneRewards?.referral25Cycles || 0}`
+        }
+      };
+    });
 
     res.json({
       success: true,

@@ -284,3 +284,28 @@ export const deleteLead = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+// DELETE /api/admin/leads/bulk-delete
+export const bulkDeleteLeads = async (req, res) => {
+  try {
+    const { leadIds } = req.body;
+    
+    if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
+      return res.status(400).json({ error: 'Lead IDs array is required' });
+    }
+    
+    console.log('Bulk deleting leads:', leadIds.length);
+    
+    const result = await Lead.deleteMany({ _id: { $in: leadIds } });
+    
+    console.log('Bulk delete result:', result);
+    
+    res.json({ 
+      message: `${result.deletedCount} leads deleted successfully`,
+      deletedCount: result.deletedCount
+    });
+  } catch (error) {
+    console.error('Bulk delete error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
