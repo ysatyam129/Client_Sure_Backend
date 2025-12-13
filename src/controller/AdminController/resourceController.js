@@ -11,11 +11,29 @@ cloudinary.config({
 // POST /api/admin/resources
 export const createResource = async (req, res) => {
   try {
-    const { title, description, type } = req.body;
+    const { title, description, type, url: videoUrl, thumbnailUrl: providedThumbnailUrl } = req.body;
     const file = req.file;
 
+    // For videos, allow URL input instead of file upload
+    if (type === 'video' && videoUrl) {
+      const resource = new Resource({
+        title,
+        description,
+        type,
+        url: videoUrl,
+        thumbnailUrl: providedThumbnailUrl || videoUrl, // Use provided thumbnail or video URL as fallback
+        previewUrl: videoUrl,
+        cloudinaryPublicId: null // No Cloudinary for URL-based videos
+      });
+
+      await resource.save();
+      console.log('Video resource saved:', resource._id);
+      return res.status(201).json(resource);
+    }
+
+    // For other types or if no URL provided for video, require file upload
     if (!file) {
-      return res.status(400).json({ error: 'File is required' });
+      return res.status(400).json({ error: 'File is required for this resource type' });
     }
 
     console.log('Uploading file:', { type, mimetype: file.mimetype, size: file.size });
@@ -94,7 +112,7 @@ export const getResource = async (req, res) => {
 // PUT /api/admin/resources/:id
 export const updateResource = async (req, res) => {
   try {
-    const { title, description, type, isActive } = req.body;
+    const { title, description, type, isActive, url: videoUrl, thumbnailUrl: providedThumbnailUrl } = req.body;
     const file = req.file;
 
     const resource = await Resource.findById(req.params.id);
@@ -108,8 +126,14 @@ export const updateResource = async (req, res) => {
     if (type) resource.type = type;
     if (isActive !== undefined) resource.isActive = isActive;
 
-    // Upload new file if provided
-    if (file) {
+    // For videos, allow URL update
+    if (type === 'video' && videoUrl) {
+      resource.url = videoUrl;
+      resource.previewUrl = videoUrl;
+      if (providedThumbnailUrl) resource.thumbnailUrl = providedThumbnailUrl;
+      resource.cloudinaryPublicId = null; // Clear Cloudinary ID for URL-based videos
+    } else if (file) {
+      // Upload new file if provided
       const result = await new Promise((resolve, reject) => {
         cloudinary.uploader.upload_stream(
           {
@@ -133,6 +157,7 @@ export const updateResource = async (req, res) => {
       } else {
         resource.thumbnailUrl = result.secure_url;
       }
+      resource.previewUrl = result.secure_url;
     }
 
     await resource.save();
