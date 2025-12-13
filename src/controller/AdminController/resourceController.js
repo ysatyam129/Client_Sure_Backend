@@ -5,7 +5,8 @@ import Resource from '../../models/Resource.js';
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+  secure: true
 });
 
 // POST /api/admin/resources
@@ -38,14 +39,16 @@ export const createResource = async (req, res) => {
 
     console.log('Uploading file:', { type, mimetype: file.mimetype, size: file.size });
 
-    // Upload to Cloudinary from buffer with auto resource type
+    // Upload to Cloudinary from buffer with proper resource type
+    const resourceType = type === 'pdf' ? 'raw' : 'auto';
     const result = await new Promise((resolve, reject) => {
       cloudinary.uploader.upload_stream(
         {
-          resource_type: 'auto',
+          resource_type: resourceType,
           folder: 'resources',
           public_id: `${type}_${Date.now()}`,
-          flags: type === 'pdf' ? 'attachment' : undefined
+          format: type === 'pdf' ? 'pdf' : undefined,
+          access_mode: 'public'
         },
         (error, result) => {
           if (error) {
@@ -134,13 +137,15 @@ export const updateResource = async (req, res) => {
       resource.cloudinaryPublicId = null; // Clear Cloudinary ID for URL-based videos
     } else if (file) {
       // Upload new file if provided
+      const resourceType = resource.type === 'pdf' ? 'raw' : 'auto';
       const result = await new Promise((resolve, reject) => {
         cloudinary.uploader.upload_stream(
           {
-            resource_type: 'auto',
+            resource_type: resourceType,
             folder: 'resources',
             public_id: `${resource.type}_${Date.now()}`,
-            flags: resource.type === 'pdf' ? 'attachment' : undefined
+            format: resource.type === 'pdf' ? 'pdf' : undefined,
+            access_mode: 'public'
           },
           (error, result) => {
             if (error) reject(error);

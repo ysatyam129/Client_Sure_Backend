@@ -1,10 +1,12 @@
 import express from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { authenticateAdmin } from '../middleware/adminAuth.js';
+import Admin from '../models/Admin.js';
 import { upload } from '../middleware/upload.js';
 import { excelUpload } from '../middleware/excelUpload.js';
 import { manualTokenRefresh, manualSubscriptionCheck } from '../services/cronJobs.js';
 import { adminLogin, adminLogout } from '../controller/AdminController/authController.js';
+import { adminSignup, getAdminProfile, updateAdminProfile, changeAdminPassword, requestAdminPasswordReset, resetAdminPassword } from '../controller/AdminController/adminProfileController.js';
 import { createResource, getResources, getResource, updateResource, deleteResource } from '../controller/AdminController/resourceController.js';
 import { uploadLeads, getLeads, getLead, updateLead, deleteLead, bulkDeleteLeads } from '../controller/AdminController/leadController.js';
 import { getUsers, getUser, updateUserTokens } from '../controller/AdminController/userController.js';
@@ -12,12 +14,21 @@ import { getAnalytics, getUserGrowthData, getRevenueData } from '../controller/A
 import { getAllPostsAdmin, deletePostAdmin, deleteCommentAdmin, getLeaderboardAdmin, getCommunityStatsAdmin, fixLeaderboardSync, getUserPrizeHistory, getAllPrizeHistory } from '../controller/AdminController/communityController.js';
 import { awardPrizeTokens, getUserTokenStatus } from '../controller/AdminController/prizeTokenController.js';
 import { getReferralAnalytics, getReferrers, getReferredUsers, getReferrerDetails } from '../controller/AdminController/referralsController.js';
+import { getEmails, getEmailById, getEmailStats, deleteEmail } from '../controller/AdminController/emailController.js';
 
 const router = express.Router();
 
 // Admin authentication
+router.post('/signup', adminSignup);
 router.post('/login', adminLogin);
 router.post('/logout', adminLogout);
+
+// Admin profile management
+router.get('/profile', authenticateAdmin, getAdminProfile);
+router.put('/profile', authenticateAdmin, updateAdminProfile);
+router.put('/change-password', authenticateAdmin, changeAdminPassword);
+router.post('/request-password-reset', requestAdminPasswordReset);
+router.post('/reset-password', resetAdminPassword);
 
 // Resource CRUD operations
 router.post('/resources', authenticateAdmin, upload.single('file'), createResource);
@@ -65,6 +76,12 @@ router.get('/referrals/analytics', authenticateAdmin, getReferralAnalytics);
 router.get('/referrals/referrers', authenticateAdmin, getReferrers);
 router.get('/referrals/referred-users', authenticateAdmin, getReferredUsers);
 router.get('/referrals/referrer/:id', authenticateAdmin, getReferrerDetails);
+
+// Email management
+router.get('/emails', authenticateAdmin, getEmails);
+router.get('/emails/stats', authenticateAdmin, getEmailStats);
+router.get('/emails/:id', authenticateAdmin, getEmailById);
+router.delete('/emails/:id', authenticateAdmin, deleteEmail);
 
 // Referral Rewards management
 import { getReferralRewards, awardReferralReward, getReferralRewardAnalytics } from '../controller/AdminController/referralRewardController.js';

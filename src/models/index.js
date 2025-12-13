@@ -10,6 +10,7 @@ import TokenTransaction from './TokenTransaction.js';
 import PrizeDistribution from './PrizeDistribution.js';
 import PrizeTemplate from './PrizeTemplate.js';
 import ReferralReward from './ReferralReward.js';
+import Admin from './Admin.js';
 
 export {
   User,
@@ -23,5 +24,6 @@ export {
   TokenTransaction,
   PrizeDistribution,
   PrizeTemplate,
-  ReferralReward
+  ReferralReward,
+  Admin
 };

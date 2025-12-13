@@ -37,6 +37,24 @@ const emailFeedbackSchema = new mongoose.Schema({
       type: String,
       enum: ['sent', 'failed'],
       default: 'sent'
+    },
+    opened: {
+      type: Boolean,
+      default: false
+    },
+    clicked: {
+      type: Boolean,
+      default: false
+    },
+    openedAt: Date,
+    clickedAt: Date,
+    openCount: {
+      type: Number,
+      default: 0
+    },
+    clickCount: {
+      type: Number,
+      default: 0
     }
   }],
   totalRecipients: {
