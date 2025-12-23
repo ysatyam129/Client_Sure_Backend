@@ -390,7 +390,7 @@ export const bulkAccessLeads = async (req, res) => {
 export const getAccessedLeads = async (req, res) => {
   try {
     const userId = req.user.userId;
-    const { page = 1, limit = 10 } = req.query;
+    const { page = 1, limit = 10, date } = req.query;
 
     const user = await User.findById(userId).select('accessedLeads');
     if (!user || !user.accessedLeads) {
@@ -406,9 +406,22 @@ export const getAccessedLeads = async (req, res) => {
       });
     }
 
+    // Filter by date if provided
+    let filteredAccessedLeads = user.accessedLeads;
+    if (date) {
+      const filterDate = new Date(date);
+      const startOfDay = new Date(filterDate.setHours(0, 0, 0, 0));
+      const endOfDay = new Date(filterDate.setHours(23, 59, 59, 999));
+      
+      filteredAccessedLeads = user.accessedLeads.filter(item => {
+        const accessedDate = new Date(item.accessedAt);
+        return accessedDate >= startOfDay && accessedDate <= endOfDay;
+      });
+    }
+
     const startIndex = (page - 1) * limit;
     const endIndex = startIndex + parseInt(limit);
-    const paginatedLeads = user.accessedLeads.slice(startIndex, endIndex);
+    const paginatedLeads = filteredAccessedLeads.slice(startIndex, endIndex);
 
     // Get full lead details
     const leadIds = paginatedLeads.map(item => item.leadId);
@@ -445,9 +458,9 @@ export const getAccessedLeads = async (req, res) => {
       leads: result,
       pagination: {
         currentPage: parseInt(page),
-        totalPages: Math.ceil(user.accessedLeads.length / limit),
-        totalItems: user.accessedLeads.length,
-        hasNext: endIndex < user.accessedLeads.length,
+        totalPages: Math.ceil(filteredAccessedLeads.length / limit),
+        totalItems: filteredAccessedLeads.length,
+        hasNext: endIndex < filteredAccessedLeads.length,
         hasPrev: page > 1
       }
     });
@@ -479,6 +492,16 @@ export const exportLeadData = async (req, res) => {
       });
     }
 
+    // Format date as DD/MM/YYYY
+    const formatDate = (dateString) => {
+      if (!dateString) return 'N/A';
+      const date = new Date(dateString);
+      const day = date.getDate().toString().padStart(2, '0');
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}/${month}/${year}`;
+    };
+
     const leadData = {
       'Lead ID': lead.leadId,
       'Name': lead.name,
@@ -493,8 +516,8 @@ export const exportLeadData = async (req, res) => {
       'Facebook': lead.facebookLink || 'N/A',
       'Instagram': lead.instagram || 'N/A',
       'Google Maps': lead.googleMapLink || 'N/A',
-      'Last Verified': lead.lastVerifiedAt ? new Date(lead.lastVerifiedAt).toLocaleDateString() : 'N/A',
-      'Accessed Date': new Date(accessedLead.accessedAt).toLocaleDateString()
+      'Last Verified': formatDate(lead.lastVerifiedAt),
+      'Accessed Date': formatDate(accessedLead.accessedAt)
     };
 
     const wb = XLSX.utils.book_new();
@@ -540,6 +563,16 @@ export const bulkExportLeads = async (req, res) => {
       isActive: true 
     });
 
+    // Format date as DD/MM/YYYY
+    const formatDate = (dateString) => {
+      if (!dateString) return 'N/A';
+      const date = new Date(dateString);
+      const day = date.getDate().toString().padStart(2, '0');
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}/${month}/${year}`;
+    };
+
     const leadsData = leads.map(lead => {
       const accessedLead = user.accessedLeads.find(item => 
         item.leadId.toString() === lead._id.toString()
@@ -559,8 +592,8 @@ export const bulkExportLeads = async (req, res) => {
         'Facebook': lead.facebookLink || 'N/A',
         'Instagram': lead.instagram || 'N/A',
         'Google Maps': lead.googleMapLink || 'N/A',
-        'Last Verified': lead.lastVerifiedAt ? new Date(lead.lastVerifiedAt).toLocaleDateString() : 'N/A',
-        'Accessed Date': accessedLead ? new Date(accessedLead.accessedAt).toLocaleDateString() : 'N/A'
+        'Last Verified': formatDate(lead.lastVerifiedAt),
+        'Accessed Date': formatDate(accessedLead?.accessedAt)
       };
     });
 
@@ -581,27 +614,46 @@ export const bulkExportLeads = async (req, res) => {
 };
 
 
-// POST /api/auth/leads/send-email
+// POST /api/leads/send-email
 export const sendBulkEmail = async (req, res) => {
   try {
-    const { subject, message, type, category, city, country, leadIds } = req.body;
-    const userId = req.user.userId;
+    console.log('📧 Email sending request received:', { 
+      subject: req.body.subject, 
+      type: req.body.type, 
+      userId: req.user?.userId 
+    });
+
+    const { subject, message, type, category, city, country, leadIds, cc, bcc } = req.body;
+    const userId = req.user?.userId;
+
+    // Validation
+    if (!userId) {
+      console.log('❌ User not authenticated');
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
 
     if (!subject || !message || !type) {
+      console.log('❌ Validation failed: Missing required fields');
       return res.status(400).json({ error: 'Subject, message, and type are required' });
     }
 
     const user = await User.findById(userId).select('accessedLeads name email');
     if (!user) {
+      console.log('❌ User not found:', userId);
       return res.status(404).json({ error: 'User not found' });
     }
 
+    console.log('👤 User found:', { name: user.name, email: user.email });
+
     const accessedLeadIds = user.accessedLeads?.map(item => item.leadId.toString()) || [];
+    console.log('📋 Accessed leads count:', accessedLeadIds.length);
     
     if (accessedLeadIds.length === 0) {
+      console.log('❌ No accessed leads found');
       return res.status(400).json({ error: 'No accessed leads found' });
     }
 
+    // Build query based on type
     let query = { _id: { $in: accessedLeadIds }, isActive: true };
     let filterCriteria = {};
 
@@ -615,46 +667,98 @@ export const sendBulkEmail = async (req, res) => {
       query.country = country;
       filterCriteria.country = country;
     } else if (type === 'selected' && leadIds && leadIds.length > 0) {
-      query._id = { $in: leadIds.filter(id => accessedLeadIds.includes(id)) };
+      const validLeadIds = leadIds.filter(id => accessedLeadIds.includes(id));
+      query._id = { $in: validLeadIds };
+      console.log('🎯 Selected leads:', validLeadIds.length);
     }
 
+    console.log('🔍 Query:', query);
     const leads = await Lead.find(query);
+    console.log('📊 Leads found:', leads.length);
 
     if (leads.length === 0) {
+      console.log('❌ No leads found matching criteria');
       return res.status(400).json({ error: 'No leads found matching criteria' });
     }
 
-    const transporter = createTransporter();
-    if (!transporter) {
-      return res.status(500).json({ error: 'Email service not available' });
+    // Create transporter
+    console.log('📮 Creating email transporter...');
+    let transporter;
+    try {
+      transporter = createTransporter();
+      if (!transporter) {
+        console.log('❌ Email transporter creation failed');
+        return res.status(500).json({ error: 'Email service configuration error' });
+      }
+      console.log('✅ Email transporter created successfully');
+    } catch (transporterError) {
+      console.error('❌ Transporter creation error:', transporterError);
+      return res.status(500).json({ error: 'Email service initialization failed' });
     }
 
     const recipients = [];
     let successCount = 0;
     let failedCount = 0;
 
+    // Send emails
+    console.log('📤 Starting to send emails...');
     for (const lead of leads) {
       try {
+        console.log(`📧 Sending email to: ${lead.email}`);
+        
         const mailOptions = {
           from: `"${user.name}" <${process.env.SMTP_USER}>`,
           to: lead.email,
           subject: subject,
+          cc: cc || undefined,
+          bcc: bcc || undefined,
           html: `
             <!DOCTYPE html>
-            <html>
+            <html lang="en">
             <head>
               <meta charset="utf-8">
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <meta http-equiv="X-UA-Compatible" content="IE=edge">
+              <title>${subject}</title>
+              <style>
+                @media only screen and (max-width: 600px) {
+                  .container { width: 100% !important; padding: 10px !important; }
+                  .content { padding: 20px !important; }
+                }
+              </style>
             </head>
-            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <div style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-                <h2 style="color: #007cba;">Hello ${lead.name},</h2>
-                <div style="margin: 20px 0;">
-                  ${message.replace(/\n/g, '<br>')}
-                </div>
-                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #888; font-size: 12px;">
-                  <p>This email was sent by ${user.name} via ClientSure.</p>
-                  <p>© ${new Date().getFullYear()} ClientSure. All rights reserved.</p>
+            <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; background-color: #f8fafc;">
+              <div class="container" style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div class="content" style="background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); border: 1px solid #e2e8f0;">
+                  <div style="text-align: center; margin-bottom: 30px;">
+                    <h1 style="color: #1e293b; font-size: 24px; font-weight: 600; margin: 0; padding: 0;">ClientSure</h1>
+                    <div style="width: 50px; height: 3px; background: linear-gradient(90deg, #3b82f6, #1d4ed8); margin: 10px auto; border-radius: 2px;"></div>
+                  </div>
+                  
+                  <div style="margin-bottom: 25px;">
+                    <h2 style="color: #1e293b; font-size: 20px; font-weight: 500; margin: 0 0 15px 0;">Hello ${lead.name},</h2>
+                  </div>
+                  
+                  <div style="margin: 25px 0; font-size: 16px; line-height: 1.7; color: #374151;">
+                    ${message}
+                  </div>
+                  
+                  <div style="margin-top: 40px; padding-top: 25px; border-top: 2px solid #f1f5f9;">
+                    <div style="background: #f8fafc; padding: 20px; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                      <p style="margin: 0; font-size: 14px; color: #64748b; line-height: 1.5;">
+                        <strong style="color: #1e293b;">Best regards,</strong><br>
+                        ${user.name}<br>
+                        <span style="color: #3b82f6;">via ClientSure Platform</span>
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div style="margin-top: 30px; text-align: center; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+                    <p style="margin: 0; font-size: 12px; color: #94a3b8; line-height: 1.4;">
+                      This email was sent via <strong>ClientSure</strong> - Professional Lead Management Platform<br>
+                      © ${new Date().getFullYear()} ClientSure. All rights reserved.
+                    </p>
+                  </div>
                 </div>
               </div>
             </body>
@@ -663,6 +767,8 @@ export const sendBulkEmail = async (req, res) => {
         };
 
         await sendEmailWithRetry(transporter, mailOptions, 2);
+        console.log(`✅ Email sent successfully to: ${lead.email}`);
+        
         recipients.push({
           leadId: lead._id,
           email: lead.email,
@@ -671,17 +777,21 @@ export const sendBulkEmail = async (req, res) => {
         });
         successCount++;
       } catch (error) {
-        console.error(`Failed to send email to ${lead.email}:`, error.message);
+        console.error(`❌ Failed to send email to ${lead.email}:`, error.message);
         recipients.push({
           leadId: lead._id,
           email: lead.email,
           name: lead.name,
-          status: 'failed'
+          status: 'failed',
+          error: error.message
         });
         failedCount++;
       }
     }
 
+    console.log(`📊 Email sending completed: ${successCount} success, ${failedCount} failed`);
+
+    // Save email feedback
     const emailFeedback = new EmailFeedback({
       userId,
       subject,
@@ -695,16 +805,46 @@ export const sendBulkEmail = async (req, res) => {
     });
 
     await emailFeedback.save();
+    console.log('💾 Email feedback saved');
 
     res.json({
+      success: true,
       message: `Emails sent successfully to ${successCount} out of ${leads.length} leads`,
       totalRecipients: leads.length,
       successCount,
       failedCount,
-      emailFeedbackId: emailFeedback._id
+      emailFeedbackId: emailFeedback._id,
+      recipients: recipients
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('💥 Email sending error:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    
+    // Handle specific error types
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Validation failed',
+        details: error.message
+      });
+    }
+    
+    if (error.name === 'CastError') {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Invalid data format',
+        details: 'Invalid ID format'
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      error: 'Email sending failed',
+      details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
   }
 };
 

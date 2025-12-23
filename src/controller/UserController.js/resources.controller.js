@@ -88,6 +88,19 @@ export const getAccessedResourceById = async (req, res) => {
   }
 };
 
+// GET /api/resources - Get all active resources for users
+export const getAllResources = async (req, res) => {
+  try {
+    const resources = await Resource.find({ isActive: true })
+      .select('title description type url thumbnailUrl createdAt')
+      .sort({ createdAt: -1 });
+    
+    res.json(resources);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 // Get accessed resources by user
 // GET /api/resources/accessed
 export const getAccessedResources = async (req, res) => {

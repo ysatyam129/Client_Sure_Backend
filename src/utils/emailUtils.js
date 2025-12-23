@@ -11,28 +11,29 @@ dotenv.config()
  */
 export const createTransporter = () => {
   try {
+    console.log('🔧 Creating SMTP transporter...');
+    console.log('📧 SMTP User:', process.env.SMTP_USER);
+    console.log('🔑 SMTP Pass configured:', !!process.env.SMTP_PASS);
+    
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      console.error('❌ SMTP credentials not configured');
+      return null;
+    }
+    
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS
-      }
+      },
+      debug: false,
+      logger: false
     });
 
-    // Verify transporter configuration
-    transporter.verify((error, success) => {
-      if (error) {
-        console.error('SMTP Transporter configuration error:', error);
-        return null;
-      } else {
-        console.log('SMTP Transporter is ready to send emails');
-        return transporter;
-      }
-    });
-
+    console.log('✅ SMTP Transporter created successfully');
     return transporter;
   } catch (error) {
-    console.error('Failed to initialize SMTP transporter:', error);
+    console.error('❌ Failed to initialize SMTP transporter:', error);
     return null;
   }
 };
@@ -51,17 +52,25 @@ export const sendEmailWithRetry = async (transporter, mailOptions, retries = 3) 
         throw new Error('Transporter not initialized');
       }
 
-      await transporter.sendMail(mailOptions);
+      console.log(`📤 Attempt ${attempt}: Sending email to ${mailOptions.to}`);
+      const result = await transporter.sendMail(mailOptions);
+      console.log(`✅ Email sent successfully:`, result.messageId);
       return true;
     } catch (error) {
-      console.error(`Email sending attempt ${attempt} failed:`, error.message);
+      console.error(`❌ Email sending attempt ${attempt} failed:`, {
+        error: error.message,
+        code: error.code,
+        command: error.command
+      });
       
       if (attempt === retries) {
         throw error;
       }
       
       // Wait before retrying (exponential backoff)
-      await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+      const delay = Math.pow(2, attempt) * 1000;
+      console.log(`⏳ Waiting ${delay}ms before retry...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
   

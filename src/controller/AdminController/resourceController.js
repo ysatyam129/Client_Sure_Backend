@@ -41,26 +41,39 @@ export const createResource = async (req, res) => {
 
     // Upload to Cloudinary from buffer with proper resource type
     const resourceType = type === 'pdf' ? 'raw' : 'auto';
-    const result = await new Promise((resolve, reject) => {
-      cloudinary.uploader.upload_stream(
-        {
-          resource_type: resourceType,
-          folder: 'resources',
-          public_id: `${type}_${Date.now()}`,
-          format: type === 'pdf' ? 'pdf' : undefined,
-          access_mode: 'public'
-        },
-        (error, result) => {
-          if (error) {
-            console.error('Cloudinary upload error:', error);
-            reject(error);
-          } else {
-            console.log('Cloudinary upload success:', result.secure_url);
-            resolve(result);
+    let result;
+    
+    try {
+      result = await new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream(
+          {
+            resource_type: resourceType,
+            folder: 'clientsure-resources',
+            public_id: `${type}_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+            format: type === 'pdf' ? 'pdf' : undefined,
+            access_mode: 'public',
+            use_filename: true,
+            unique_filename: true
+          },
+          (error, result) => {
+            if (error) {
+              console.error('Cloudinary upload error:', error);
+              reject(new Error(`Cloudinary upload failed: ${error.message}`));
+            } else {
+              console.log('Cloudinary upload success:', result.secure_url);
+              resolve(result);
+            }
           }
-        }
-      ).end(file.buffer);
-    });
+        ).end(file.buffer);
+      });
+    } catch (uploadError) {
+      console.error('Cloudinary upload failed:', uploadError);
+      return res.status(500).json({ 
+        error: 'File upload failed', 
+        details: uploadError.message,
+        suggestion: 'Please check Cloudinary configuration or try a smaller file'
+      });
+    }
 
     // Generate proper URLs for different file types
     let thumbnailUrl = result.secure_url;
