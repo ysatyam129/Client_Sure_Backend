@@ -5,31 +5,46 @@ import { User } from "../models/index.js";
 export const authenticateToken = async (req, res, next) => {
   try {
     // Check for token in Authorization header (Bearer TOKEN) or cookies
-    // kaushik ne commet kiya hai 2lines
-    // const authHeader = req.headers['authorization'];
-    // const headerToken = authHeader && authHeader.split(' ')[1];
     const cookieToken = req.cookies?.userToken;
-
-    // kaushik work here
     const headerToken = req.headers.authorization?.replace("Bearer ", "");
-    //      const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "")
-    // kauhik work above
     const token = headerToken || cookieToken;
 
     if (!token) {
       return res.status(401).json({ error: "Access token required" });
     }
 
-    // Verify JWT token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // Verify JWT token with proper error handling
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (jwtError) {
+      console.error('JWT verification error:', jwtError.message);
+      if (jwtError.name === "JsonWebTokenError") {
+        return res.status(401).json({ error: "Invalid token" });
+      }
+      if (jwtError.name === "TokenExpiredError") {
+        return res.status(401).json({ error: "Token expired" });
+      }
+      return res.status(401).json({ error: "Token verification failed" });
+    }
 
-    // Validate decoded token structure
-    if (!decoded || !decoded.userId) {
+    // Validate decoded token structure - handle different JWT formats
+    let userId;
+    if (decoded.userId) {
+      userId = decoded.userId;
+    } else if (decoded.id) {
+      userId = decoded.id;
+    } else if (decoded.payload && decoded.payload.userId) {
+      userId = decoded.payload.userId;
+    } else if (decoded.payload && decoded.payload.id) {
+      userId = decoded.payload.id;
+    } else {
+      console.error('Invalid token structure:', decoded);
       return res.status(401).json({ error: "Invalid token structure" });
     }
 
     // Find user and check if still exists
-    const user = await User.findById(decoded.userId).populate(
+    const user = await User.findById(userId).populate(
       "subscription.planId"
     );
     if (!user) {
@@ -55,13 +70,6 @@ export const authenticateToken = async (req, res, next) => {
 
     next();
   } catch (error) {
-    if (error.name === "JsonWebTokenError") {
-      return res.status(401).json({ error: "Invalid token" });
-    }
-    if (error.name === "TokenExpiredError") {
-      return res.status(401).json({ error: "Token expired" });
-    }
-
     console.error("Auth middleware error:", error);
     res.status(500).json({ error: "Internal server error" });
   }

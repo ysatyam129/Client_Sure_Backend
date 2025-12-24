@@ -110,9 +110,13 @@ export const register = async (req, res) => {
     const planInfo = planId && planName && planPrice ? { planId, planName, planPrice } : null;
     await sendWelcomeEmail(user, resetToken, planInfo);
 
-    // Generate JWT token
+    // Generate JWT token with nested payload structure
     const token = jwt.sign(
       { 
+        payload: {
+          userId: user._id, 
+          email: user.email
+        },
         userId: user._id, 
         email: user.email
       },
@@ -183,9 +187,14 @@ export const login = async (req, res) => {
       return res.status(401).json({ error: 'Subscription expired. Please renew your plan.' });
     }
 
-    // Generate JWT token
+    // Generate JWT token with nested payload structure
     const token = jwt.sign(
       { 
+        payload: {
+          userId: user._id, 
+          email: user.email,
+          planId: user.subscription.planId?._id
+        },
         userId: user._id, 
         email: user.email,
         planId: user.subscription.planId?._id

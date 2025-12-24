@@ -17,8 +17,8 @@ export const accessResource = async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-console.log(user); 
-console.log("call laagi")
+console.log('🔍 User accessing resource:', user.email); 
+console.log('✅ Access resource call received for ID:', id)
     // Check if subscription is active
     const now = new Date();
     if (!user.subscription.endDate || user.subscription.endDate < now) {
@@ -91,12 +91,27 @@ export const getAccessedResourceById = async (req, res) => {
 // GET /api/resources - Get all active resources for users
 export const getAllResources = async (req, res) => {
   try {
-    const resources = await Resource.find({ isActive: true })
-      .select('title description type url thumbnailUrl createdAt')
+    console.log('🔍 getAllResources called');
+    
+    // First get all resources for debugging
+    const allResources = await Resource.find({})
+      .select('title description type url thumbnailUrl createdAt isActive')
       .sort({ createdAt: -1 });
     
-    res.json(resources);
+    console.log('📊 Total resources in DB:', allResources.length);
+    console.log('📊 Resources data:', allResources.map(r => ({ 
+      title: r.title, 
+      isActive: r.isActive,
+      createdAt: r.createdAt 
+    })));
+    
+    // Filter active resources
+    const activeResources = allResources.filter(r => r.isActive !== false);
+    console.log('✅ Active resources:', activeResources.length);
+    
+    res.json(activeResources);
   } catch (error) {
+    console.error('❌ getAllResources error:', error);
     res.status(500).json({ error: error.message });
   }
 };

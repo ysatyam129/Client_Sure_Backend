@@ -155,6 +155,22 @@ app.get("/health", (req, res) => {
     });
 });
 
+// API Health check endpoint for frontend compatibility
+app.get("/api/health", (req, res) => {
+    res.status(200).json({
+        status: "OK",
+        message: "ClientSure API is healthy",
+        timestamp: new Date().toISOString(),
+        version: "1.0.0",
+        database: "connected",
+        environment: process.env.NODE_ENV || 'development',
+        cors: {
+            configured: true,
+            requestOrigin: req.get('Origin') || 'No origin header'
+        }
+    });
+});
+
 app.use("/api/payments", paymentsRoute);
 app.use("/api/auth", authRoute);
 app.use("/api/user", userRoute);

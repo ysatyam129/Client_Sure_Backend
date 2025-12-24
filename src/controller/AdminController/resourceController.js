@@ -24,11 +24,17 @@ export const createResource = async (req, res) => {
         url: videoUrl,
         thumbnailUrl: providedThumbnailUrl || videoUrl, // Use provided thumbnail or video URL as fallback
         previewUrl: videoUrl,
-        cloudinaryPublicId: null // No Cloudinary for URL-based videos
+        cloudinaryPublicId: null, // No Cloudinary for URL-based videos
+        isActive: true // Explicitly set to true
       });
 
       await resource.save();
-      console.log('Video resource saved:', resource._id);
+      console.log('✅ Video resource saved successfully:', {
+        id: resource._id,
+        title: resource.title,
+        isActive: resource.isActive,
+        type: resource.type
+      });
       return res.status(201).json(resource);
     }
 
@@ -90,11 +96,17 @@ export const createResource = async (req, res) => {
       url: result.secure_url,
       thumbnailUrl: thumbnailUrl,
       previewUrl: result.secure_url,
-      cloudinaryPublicId: result.public_id
+      cloudinaryPublicId: result.public_id,
+      isActive: true // Explicitly set to true
     });
 
     await resource.save();
-    console.log('Resource saved:', resource._id);
+    console.log('✅ Resource saved successfully:', {
+      id: resource._id,
+      title: resource.title,
+      isActive: resource.isActive,
+      type: resource.type
+    });
     res.status(201).json(resource);
   } catch (error) {
     console.error('Create resource error:', error);
